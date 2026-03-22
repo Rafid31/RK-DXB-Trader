@@ -924,17 +924,12 @@ function indDisplay(name, val) {
 }
 
 function formatPrice(price) {
-  if (price === null || price === undefined) return '—';
-  if (price >= 1000) {
-    // Crypto: comma separated, 2 decimals
-    return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  } else if (price >= 10) {
-    // JPY pairs: 3 decimals
-    return price.toFixed(3);
-  } else {
-    // Forex: 5 decimals
-    return price.toFixed(5);
-  }
+  if (price === null || price === undefined || price === '—') return '—';
+  const n = parseFloat(String(price).replace(/,/g, ''));
+  if (isNaN(n)) return String(price);
+  if (n >= 1000) return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (n >= 10) return n.toFixed(3);
+  return n.toFixed(5);
 }
 
 // ── Render a Pair Card ───────────────────────────────────
