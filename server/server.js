@@ -10,6 +10,7 @@ const fetch = require('node-fetch');
 const cron = require('node-cron');
 
 const { getKey } = require('./apiKeys');
+const { fetchCryptoCandles, isCryptoActiveHours } = require('./binance');
 const { calculateSignal } = require('./signalEngine');
 const { getCurrentSessions, isMarketOpen, getNextSessionEvent, getSessionAlerts } = require('./sessions');
 const { sendTelegram, formatSignalAlert, formatSessionAlert } = require('./telegram');
@@ -30,10 +31,17 @@ const PAIRS = [
   { symbol: 'GBP/JPY' }, { symbol: 'EUR/JPY' }
 ];
 
+const CRYPTO_PAIRS = [
+  { symbol: 'BTC/USD', type: 'crypto' },
+  { symbol: 'ETH/USD', type: 'crypto' }
+];
+
+const ALL_PAIRS = [...PAIRS.map(p => ({...p, type:'forex'})), ...CRYPTO_PAIRS];
+
 const candleStore = {};
 const lastSignals = {};
 const sentSignals = new Set();
-PAIRS.forEach(p => {
+ALL_PAIRS.forEach(p => {
   candleStore[p.symbol] = [];
   lastSignals[p.symbol] = { signal: 'WAIT', confidence: 0 };
 });
@@ -92,7 +100,7 @@ function buildState() {
   const nextEvent = getNextSessionEvent();
   const marketOpen = isMarketOpen();
   const now = new Date();
-  const pairs = PAIRS.map(p => {
+  const pairs = ALL_PAIRS.map(p => {
     const candles = candleStore[p.symbol];
     const signal = lastSignals[p.symbol];
     const price = candles.length > 0 ? candles[candles.length - 1].close : null;
@@ -100,6 +108,7 @@ function buildState() {
     const change = price && prev ? ((price - prev) / prev) * 100 : 0;
     return {
       symbol: p.symbol,
+      type: p.type || 'forex',
       price: price ? price.toFixed(price > 10 ? 3 : 5) : '—',
       change: +change.toFixed(3),
       signal: signal.signal || 'WAIT', confidence: signal.confidence || 0,
@@ -258,5 +267,5 @@ server.listen(PORT, async () => {
   console.log(`\n🚀 RK DXB Trader v2 — Port ${PORT}`);
   await updateAllPairs();
   console.log('✅ Ready\n');
-  await sendTelegram('🟢 <b>RK DXB Trader v2</b>\n\n✅ Signals only during open sessions\n✅ Single device per email enforced\n✅ Admin panel active\n✅ 8 forex pairs tracking');
+  await sendTelegram('🟢 <b>RK DXB Trader v2.1</b>\n\n✅ 8 forex pairs (Twelve Data)\n✅ 2 crypto pairs BTC+ETH (Binance)\n✅ Session-gated signals\n✅ Single device enforced');
 });

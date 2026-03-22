@@ -399,6 +399,29 @@
     border-color: rgba(74,90,128,0.25);
   }
 
+  .crypto-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    font-family: var(--font-mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255,208,96,0.08);
+    color: var(--gold);
+    border: 1px solid rgba(255,208,96,0.25);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-left: 6px;
+  }
+
+  .pair-card.crypto-card {
+    border-top-color: rgba(255,208,96,0.3);
+  }
+  .pair-card.crypto-card::before {
+    background: linear-gradient(90deg, var(--gold), transparent);
+  }
+
   /* Confidence bar */
   .conf-row {
     display: flex;
@@ -635,7 +658,7 @@
 <!-- ── Pairs Grid ─────────────────────────────────────── -->
 <main>
   <div class="grid-header">
-    <span class="grid-title">// Live Signals — 1min Real Market</span>
+    <span class="grid-title">// Live Signals — Forex + Crypto · 1min</span>
     <span class="last-updated" id="lastUpdated">Waiting for data...</span>
   </div>
   <div class="pairs-grid" id="pairsGrid">
@@ -864,7 +887,8 @@ function indDisplay(name, val) {
 // ── Render a Pair Card ───────────────────────────────────
 function renderCard(p) {
   const sigClass = p.signal === 'BUY' ? 'buy' : p.signal === 'SELL' ? 'sell' : 'wait';
-  const cardClass = 'pair-card signal-' + p.signal.toLowerCase();
+  const isCrypto = p.type === 'crypto';
+  const cardClass = 'pair-card signal-' + p.signal.toLowerCase() + (isCrypto ? ' crypto-card' : '');
 
   const changeStr = p.change >= 0
     ? `+${p.change.toFixed(3)}%`
@@ -883,7 +907,10 @@ function renderCard(p) {
   <div class="${cardClass}" id="card-${p.symbol.replace('/','_')}">
     <div class="card-top">
       <div>
-        <div class="pair-name">${p.symbol.replace('/','/​')}</div>
+        <div style="display:flex;align-items:center">
+          <div class="pair-name">${p.symbol.replace('/','/​')}</div>
+          ${isCrypto ? '<span class="crypto-badge">⚡ Crypto</span>' : ''}
+        </div>
         <div class="price-row">
           <span class="price-val">${p.price}</span>
           <span class="price-change ${changeClass}">${changeStr}</span>
