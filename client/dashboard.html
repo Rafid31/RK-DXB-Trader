@@ -195,6 +195,17 @@
     background: transparent;
   }
 
+  .crypto-pill {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 3px 10px;
+    border-radius: 12px;
+    color: var(--gold);
+    border: 1px solid rgba(255,208,96,0.35);
+    background: rgba(255,208,96,0.06);
+    letter-spacing: 0.5px;
+  }
+
   .market-status {
     font-size: 12px;
     font-family: var(--font-mono);
@@ -571,6 +582,21 @@
     display: none;
   }
 
+  /* Crypto cards always visible, market closed = only a warning bar not full overlay */
+  .crypto-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255,208,96,0.1);
+    color: var(--gold);
+    border: 1px solid rgba(255,208,96,0.3);
+    animation: pulse 2s infinite;
+  }
+
   .market-closed h2 {
     font-size: 32px;
     font-weight: 800;
@@ -635,10 +661,11 @@
 <div class="session-bar">
   <div class="session-pills">
     <span class="session-label">Sessions:</span>
+  <span class="session-pill inactive" id="sess-sydney">🇦🇺 Sydney</span>
+    <span class="session-pill inactive" id="sess-tokyo">🇯🇵 Tokyo</span>
     <span class="session-pill inactive" id="sess-london">🇬🇧 London</span>
     <span class="session-pill inactive" id="sess-newYork">🇺🇸 New York</span>
-    <span class="session-pill inactive" id="sess-tokyo">🇯🇵 Tokyo</span>
-    <span class="session-pill inactive" id="sess-sydney">🇦🇺 Sydney</span>
+    <span class="session-pill crypto-pill">⚡ BTC/ETH 24/7</span>
   </div>
   <div style="display:flex;align-items:center;gap:16px">
     <div class="next-event" id="nextEvent">⏳ Loading...</div>
@@ -672,8 +699,9 @@
 <!-- ── Market Closed ─────────────────────────────────── -->
 <div class="market-closed" id="marketClosed">
   <div style="font-size:48px">😴</div>
-  <h2>Market Closed</h2>
-  <p>Signals resume when London or New York session opens.</p>
+  <h2>Forex Market Closed</h2>
+  <p>Forex signals resume when London or New York opens.</p>
+  <p style="font-size:13px;font-family:var(--font-mono);color:var(--gold);margin-top:8px">⚡ BTC/ETH signals running 24/7</p>
   <div id="closedNextEvent" style="font-family:var(--font-mono);font-size:13px;color:var(--gold)"></div>
 </div>
 
@@ -817,23 +845,23 @@ function hideEnterNow() {
 
 // ── Session Pills ────────────────────────────────────────
 function updateSessions(sessions, marketOpen, nextEvent) {
-  const all = ['london','newYork','tokyo','sydney'];
+  const sessionMap = { london: 'London', newYork: 'New York', tokyo: 'Tokyo', sydney: 'Sydney' };
   const active = (sessions || []).map(s => s.toLowerCase().replace(' ',''));
 
-  all.forEach(s => {
-    const el = document.getElementById('sess-' + s);
+  Object.keys(sessionMap).forEach(key => {
+    const el = document.getElementById('sess-' + key);
     if (!el) return;
-    const isActive = active.some(a => a.includes(s.toLowerCase().replace('newyork','new')));
+    const isActive = active.some(a => a.includes(key === 'newYork' ? 'newyork' : key));
     el.className = 'session-pill ' + (isActive ? 'active' : 'inactive');
   });
 
   const ms = document.getElementById('marketStatus');
   if (marketOpen) {
     ms.className = 'market-status open';
-    ms.textContent = '● Market OPEN';
+    ms.textContent = '● Forex OPEN';
   } else {
     ms.className = 'market-status closed';
-    ms.textContent = '● Market CLOSED';
+    ms.textContent = '● Forex CLOSED';
   }
 
   if (nextEvent) {
@@ -845,7 +873,8 @@ function updateSessions(sessions, marketOpen, nextEvent) {
     document.getElementById('closedNextEvent').textContent = `${nextEvent.name} in ${timeStr}`;
   }
 
-  // Market closed overlay - only show outside ALL sessions
+  // Market closed overlay — only affects FOREX cards, crypto stays live
+  // Show overlay only when forex is closed AND only blur forex cards
   const closedOverlay = document.getElementById('marketClosed');
   closedOverlay.style.display = marketOpen ? 'none' : 'flex';
 }
@@ -904,12 +933,12 @@ function renderCard(p) {
   ).join('');
 
   return `
-  <div class="${cardClass}" id="card-${p.symbol.replace('/','_')}">
+  <div class="${cardClass}" id="card-${p.symbol.replace('/','_')}" data-type="${p.type || 'forex'}">
     <div class="card-top">
       <div>
         <div style="display:flex;align-items:center">
           <div class="pair-name">${p.symbol.replace('/','/​')}</div>
-          ${isCrypto ? '<span class="crypto-badge">⚡ Crypto</span>' : ''}
+          ${isCrypto ? '<span class="crypto-badge">⚡ Crypto</span><span class="crypto-live-badge" style="margin-left:4px">● LIVE 24/7</span>' : ''}
         </div>
         <div class="price-row">
           <span class="price-val">${p.price}</span>
@@ -981,6 +1010,7 @@ function renderState(state) {
 
   // Sessions
   updateSessions(state.sessions, state.marketOpen, state.nextEvent);
+  // Crypto cards always show live regardless of forex session
 
   // Timer
   if (state.secsRemainingInCandle) updateTimer(state.secsRemainingInCandle);

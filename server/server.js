@@ -10,9 +10,9 @@ const fetch = require('node-fetch');
 const cron = require('node-cron');
 
 const { getKey } = require('./apiKeys');
-const { fetchCryptoCandles, isCryptoActiveHours } = require('./binance');
+const { fetchCryptoCandles } = require('./binance');
 const { calculateSignal } = require('./signalEngine');
-const { getCurrentSessions, isMarketOpen, getNextSessionEvent, getSessionAlerts } = require('./sessions');
+const { getCurrentSessions, isMarketOpen, isForexOpen, isHighVolatilitySession, getNextSessionEvent, getSessionAlerts } = require('./sessions');
 const { sendTelegram, formatSignalAlert, formatSessionAlert } = require('./telegram');
 
 const PORT = process.env.PORT || 3001;
@@ -67,38 +67,51 @@ async function fetchCandles(symbol, outputsize = 90) {
   }
 }
 
-// ── Update pair ──────────────────────────────────────────────
+// ── Update pair + Telegram gating ───────────────────────────
 async function updatePair(pair) {
-  const candles = await fetchCandles(pair.symbol);
+  // Fetch from correct data source
+  const candles = pair.type === 'crypto'
+    ? await fetchCryptoCandles(pair.symbol)
+    : await fetchCandles(pair.symbol);
   if (!candles || candles.length < 30) return;
+
   candleStore[pair.symbol] = candles;
   const result = calculateSignal(candles);
   lastSignals[pair.symbol] = { ...result, updatedAt: new Date().toISOString() };
 
-  // FIX: Only telegram during open market sessions
-  if (!isMarketOpen()) return;
+  // Telegram gating:
+  // Crypto = 24/7 (Binance never closes)
+  // Forex = only London + NY sessions (high volume, real trading)
+  const canAlert = pair.type === 'crypto' ? true : isHighVolatilitySession();
+  if (!canAlert) return;
 
   const signalKey = `${pair.symbol}-${result.signal}-${Math.floor(Date.now() / 60000)}`;
   if (result.signal !== 'WAIT' && result.confidence >= 70 && !sentSignals.has(signalKey)) {
     sentSignals.add(signalKey);
-    if (sentSignals.size > 100) sentSignals.delete(sentSignals.values().next().value);
+    if (sentSignals.size > 200) sentSignals.delete(sentSignals.values().next().value);
     await sendTelegram(formatSignalAlert(pair.symbol, result.signal, result.confidence, result.reasons || []));
   }
 }
 
 async function updateAllPairs() {
+  // Forex pairs — stagger 1.5s each (Twelve Data rate limit)
   for (let i = 0; i < PAIRS.length; i++) {
-    await updatePair(PAIRS[i]);
+    await updatePair({ ...PAIRS[i], type: 'forex' });
     if (i < PAIRS.length - 1) await new Promise(r => setTimeout(r, 1500));
   }
-  console.log(`[${new Date().toISOString()}] Updated | Market: ${isMarketOpen() ? 'OPEN' : 'CLOSED'}`);
+  // Crypto pairs — Binance, no rate limit
+  for (const cp of CRYPTO_PAIRS) {
+    await updatePair(cp);
+  }
+  console.log(`[${new Date().toISOString()}] ${ALL_PAIRS.length} pairs | Forex: ${isForexOpen() ? 'OPEN' : 'CLOSED'} | Crypto: 24/7`);
 }
 
 // ── Build state ──────────────────────────────────────────────
 function buildState() {
   const sessions = getCurrentSessions();
   const nextEvent = getNextSessionEvent();
-  const marketOpen = isMarketOpen();
+  const marketOpen = isForexOpen(); // forex session open
+  const cryptoActive = true; // crypto always 24/7
   const now = new Date();
   const pairs = ALL_PAIRS.map(p => {
     const candles = candleStore[p.symbol];
@@ -120,7 +133,8 @@ function buildState() {
   });
   return {
     type: 'state', pairs, sessions: sessions.map(s => s.name),
-    marketOpen, nextEvent, serverTime: now.toISOString(),
+    marketOpen, cryptoActive: true, nextEvent,
+    serverTime: now.toISOString(),
     secsRemainingInCandle: 60 - now.getUTCSeconds()
   };
 }
@@ -267,5 +281,5 @@ server.listen(PORT, async () => {
   console.log(`\n🚀 RK DXB Trader v2 — Port ${PORT}`);
   await updateAllPairs();
   console.log('✅ Ready\n');
-  await sendTelegram('🟢 <b>RK DXB Trader v2.1</b>\n\n✅ 8 forex pairs (Twelve Data)\n✅ 2 crypto pairs BTC+ETH (Binance)\n✅ Session-gated signals\n✅ Single device enforced');
+  await sendTelegram('🟢 <b>RK DXB Trader v2.2</b>\n\n✅ 8 forex pairs — London/NY sessions\n✅ BTC/ETH — 24/7 Binance live\n✅ Asian session (Tokyo) added\n✅ Single device enforced');
 });
