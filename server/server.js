@@ -42,8 +42,9 @@ PAIRS.forEach(p => {
 // ── Twelve Data Fetcher ──────────────────────────────────────
 async function fetchCandles(symbol, outputsize = 90) {
   const key = getKey();
-  const tdSymbol = encodeURIComponent(symbol);
+  const tdSymbol = symbol; // Twelve Data accepts EUR/USD directly
   const url = `https://api.twelvedata.com/time_series?symbol=${tdSymbol}&interval=1min&outputsize=${outputsize}&apikey=${key}`;
+  console.log(`[${symbol}] Fetching: ${url.replace(key, 'KEY_HIDDEN')}`);
 
   try {
     const res = await fetch(url, { timeout: 10000 });
