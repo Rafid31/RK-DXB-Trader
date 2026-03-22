@@ -656,12 +656,16 @@
 
 <script>
 // ── Auth Guard ──────────────────────────────────────────
-if (!sessionStorage.getItem('rk_auth')) {
+const AUTH_EMAIL = sessionStorage.getItem('rk_auth_email');
+const AUTH_TOKEN = sessionStorage.getItem('rk_auth_token');
+if (!AUTH_EMAIL || !AUTH_TOKEN) {
   window.location.href = 'index.html';
 }
 
-function logout() {
-  sessionStorage.removeItem('rk_auth');
+async function logout() {
+  try { await fetch('https://rk-dxb-trader.onrender.com/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: AUTH_EMAIL }) }); } catch(e) {}
+  sessionStorage.removeItem('rk_auth_email');
+  sessionStorage.removeItem('rk_auth_token');
   window.location.href = 'index.html';
 }
 
@@ -681,15 +685,30 @@ function connect() {
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
-    updateConnBadge('connected', 'Live');
     clearTimeout(reconnectTimer);
+    // Send auth handshake
+    ws.send(JSON.stringify({ type: 'auth', email: AUTH_EMAIL, token: AUTH_TOKEN }));
   };
 
   ws.onmessage = (e) => {
     try {
-      const state = JSON.parse(e.data);
-      lastState = state;
-      renderState(state);
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'auth_ok') {
+        updateConnBadge('connected', 'Live');
+        return;
+      }
+      if (msg.type === 'auth_failed' || msg.type === 'kicked') {
+        updateConnBadge('disconnected', 'Session ended');
+        alert(msg.type === 'kicked' ? '⚠️ You were logged in from another device. This session has ended.' : '⚠️ Session expired. Please login again.');
+        sessionStorage.removeItem('rk_auth_email');
+        sessionStorage.removeItem('rk_auth_token');
+        window.location.href = 'index.html';
+        return;
+      }
+      if (msg.type === 'state') {
+        lastState = msg;
+        renderState(msg);
+      }
     } catch(err) {
       console.error('Parse error:', err);
     }

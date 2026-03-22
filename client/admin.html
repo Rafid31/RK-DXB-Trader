@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RK DXB Trader — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#050810;--panel:#0d1428;--border:rgba(0,180,255,0.12);--accent:#00b4ff;--text:#e8f0ff;--muted:#4a5a80;--red:#ff3f5a;--green:#00e676;--gold:#ffd060;--font-head:'Syne',sans-serif;--font-mono:'Space Mono',monospace}
+body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-head);padding:24px}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,180,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,255,0.025) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:700px;margin:0 auto}
+h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.sub{font-size:12px;font-family:var(--font-mono);color:var(--muted);margin-bottom:32px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px}
+.card-title{font-size:13px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:16px}
+.input-row{display:flex;gap:10px;margin-bottom:20px}
+input[type=email],input[type=password]{flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font-mono);font-size:13px;outline:none}
+input:focus{border-color:var(--accent)}
+.btn{padding:10px 18px;border:none;border-radius:8px;font-family:var(--font-head);font-weight:700;font-size:13px;cursor:pointer;transition:opacity 0.2s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#0066ff);color:#fff}
+.btn-danger{background:rgba(255,63,90,0.15);border:1px solid rgba(255,63,90,0.35);color:var(--red)}
+.btn:hover{opacity:0.85}
+.user-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
+.user-email{font-family:var(--font-mono);font-size:13px}
+.user-meta{font-size:11px;font-family:var(--font-mono);color:var(--muted)}
+.badge{font-size:10px;font-family:var(--font-mono);padding:2px 8px;border-radius:4px;margin-left:8px}
+.badge-active{background:rgba(0,230,118,0.1);color:var(--green);border:1px solid rgba(0,230,118,0.3)}
+.badge-inactive{background:rgba(74,90,128,0.1);color:var(--muted);border:1px solid rgba(74,90,128,0.25)}
+.msg{padding:10px 14px;border-radius:8px;font-size:13px;font-family:var(--font-mono);margin-bottom:16px;display:none}
+.msg.ok{background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);color:var(--green)}
+.msg.err{background:rgba(255,63,90,0.1);border:1px solid rgba(255,63,90,0.3);color:var(--red)}
+#login-section{display:block}
+#admin-section{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="login-section">
+    <h1>🔐 Admin Panel</h1>
+    <p class="sub">// RK DXB Trader — restricted access</p>
+    <div class="card">
+      <div class="card-title">Admin Login</div>
+      <div class="input-row">
+        <input type="password" id="adminKey" placeholder="Admin key" />
+        <button class="btn btn-primary" onclick="adminLogin()">Login</button>
+      </div>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+  </div>
+
+  <div id="admin-section">
+    <h1>⚙️ Admin Panel</h1>
+    <p class="sub">// Manage users · Active sessions · RK DXB Trader</p>
+
+    <div class="card">
+      <div class="card-title">Add New User</div>
+      <div class="msg" id="addMsg"></div>
+      <div class="input-row">
+        <input type="email" id="newEmail" placeholder="user@example.com" />
+        <button class="btn btn-primary" onclick="addUser()">Add Email</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Authorized Users <span id="userCount" style="color:var(--accent)"></span></div>
+      <div id="userList">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SERVER = 'https://rk-dxb-trader.onrender.com';
+let adminKey = '';
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + type;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+async function adminLogin() {
+  adminKey = document.getElementById('adminKey').value.trim();
+  try {
+    const res = await fetch(`${SERVER}/admin/users?key=${adminKey}`);
+    if (!res.ok) { showMsg('loginMsg', 'Wrong admin key', 'err'); return; }
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('admin-section').style.display = 'block';
+    loadUsers();
+  } catch(e) { showMsg('loginMsg', 'Server unreachable', 'err'); }
+}
+
+async function loadUsers() {
+  try {
+    const res = await fetch(`${SERVER}/admin/users?key=${adminKey}`);
+    const data = await res.json();
+    document.getElementById('userCount').textContent = `(${data.emails.length})`;
+    const list = document.getElementById('userList');
+    if (!data.emails.length) { list.innerHTML = '<p style="color:var(--muted);font-size:13px;font-family:var(--font-mono)">No users yet</p>'; return; }
+    list.innerHTML = data.emails.map(email => {
+      const session = data.sessions[email];
+      const isActive = !!session;
+      return `<div class="user-row">
+        <div>
+          <span class="user-email">${email}</span>
+          <span class="badge ${isActive ? 'badge-active' : 'badge-inactive'}">${isActive ? 'Online' : 'Offline'}</span>
+          ${isActive ? `<div class="user-meta">IP: ${session.ip} · Since: ${new Date(session.connectedAt).toLocaleTimeString()}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:8px">
+          ${isActive ? `<button class="btn btn-danger" onclick="kickUser('${email}')" style="font-size:11px;padding:6px 10px">Kick</button>` : ''}
+          ${email !== 'rafhidk.rk@gmail.com' ? `<button class="btn btn-danger" onclick="removeUser('${email}')" style="font-size:11px;padding:6px 10px">Remove</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { document.getElementById('userList').innerHTML = '<p style="color:var(--red)">Error loading users</p>'; }
+}
+
+async function addUser() {
+  const email = document.getElementById('newEmail').value.trim().toLowerCase();
+  if (!email || !email.includes('@')) { showMsg('addMsg', 'Enter a valid email', 'err'); return; }
+  try {
+    const res = await fetch(`${SERVER}/admin/users`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (data.ok) { showMsg('addMsg', `Added: ${email}`, 'ok'); document.getElementById('newEmail').value = ''; loadUsers(); }
+    else showMsg('addMsg', data.error || 'Error', 'err');
+  } catch(e) { showMsg('addMsg', 'Server error', 'err'); }
+}
+
+async function removeUser(email) {
+  if (!confirm(`Remove ${email}?`)) return;
+  await fetch(`${SERVER}/admin/users/${encodeURIComponent(email)}`, {
+    method: 'DELETE', headers: { 'X-Admin-Key': adminKey }
+  });
+  loadUsers();
+}
+
+async function kickUser(email) {
+  await fetch(`${SERVER}/admin/sessions/${encodeURIComponent(email)}`, {
+    method: 'DELETE', headers: { 'X-Admin-Key': adminKey }
+  });
+  setTimeout(loadUsers, 500);
+}
+
+document.getElementById('adminKey').addEventListener('keydown', e => { if (e.key === 'Enter') adminLogin(); });
+setInterval(() => { if (adminKey) loadUsers(); }, 10000);
+</script>
+</body>
+</html>

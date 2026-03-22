@@ -276,33 +276,46 @@
 </div>
 
 <script>
-  // Authorized emails (add more here if needed later)
-  const AUTHORIZED = ['rafhidk.rk@gmail.com'];
+  const SERVER = 'https://rk-dxb-trader.onrender.com';
 
-  function login() {
+  async function login() {
     const email = document.getElementById('email').value.trim().toLowerCase();
     const err = document.getElementById('error');
-
-    if (AUTHORIZED.includes(email)) {
-      sessionStorage.setItem('rk_auth', email);
-      window.location.href = 'dashboard.html';
-    } else {
+    const btn = document.querySelector('.btn-login');
+    if (!email) return;
+    btn.textContent = 'Checking...';
+    btn.style.opacity = '0.7';
+    try {
+      const res = await fetch(SERVER + '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        sessionStorage.setItem('rk_auth_email', data.email);
+        sessionStorage.setItem('rk_auth_token', data.token);
+        window.location.href = 'dashboard.html';
+      } else {
+        err.textContent = '⛔ Access denied. Unauthorized email.';
+        err.style.display = 'block';
+        document.getElementById('email').style.borderColor = 'var(--red)';
+        setTimeout(() => { err.style.display = 'none'; document.getElementById('email').style.borderColor = 'var(--border)'; }, 3000);
+        btn.textContent = 'Enter Dashboard →';
+        btn.style.opacity = '1';
+      }
+    } catch(e) {
+      err.textContent = '⚠️ Server starting up, try again in 10 seconds...';
       err.style.display = 'block';
-      document.getElementById('email').style.borderColor = 'var(--red)';
-      setTimeout(() => {
-        err.style.display = 'none';
-        document.getElementById('email').style.borderColor = 'var(--border)';
-      }, 3000);
+      setTimeout(() => err.style.display = 'none', 5000);
+      btn.textContent = 'Enter Dashboard →';
+      btn.style.opacity = '1';
     }
   }
 
-  // Enter key support
-  document.getElementById('email').addEventListener('keydown', e => {
-    if (e.key === 'Enter') login();
-  });
+  document.getElementById('email').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
-  // If already logged in, go straight to dashboard
-  if (sessionStorage.getItem('rk_auth')) {
+  if (sessionStorage.getItem('rk_auth_email') && sessionStorage.getItem('rk_auth_token')) {
     window.location.href = 'dashboard.html';
   }
 </script>
