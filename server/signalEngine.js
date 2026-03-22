@@ -209,8 +209,11 @@ function multiCandleAnalysis(candles) {
 // ── Volume Analysis ──────────────────────────────────────────
 function volumeAnalysis(volumes) {
   if (volumes.length < 10) return { bias: 0, aboveAvg: false };
-  const recent = volumes[volumes.length - 1];
-  const avgVol = avg(volumes.slice(-20));
+  // Filter out zeros (forex often has 0 volume from API)
+  const nonZero = volumes.filter(v => v > 0);
+  if (nonZero.length < 5) return { bias: 0, aboveAvg: false };
+  const recent = nonZero[nonZero.length - 1];
+  const avgVol = avg(nonZero.slice(-20));
   const aboveAvg = recent > avgVol * 1.2;
   return { bias: aboveAvg ? 1 : 0, aboveAvg };
 }
@@ -341,14 +344,14 @@ function calculateSignal(candles) {
   const maxVotes = 20; // max possible
   const upPct = totalVotes > 0 ? (upVotes / (upVotes + downVotes)) * 100 : 50;
 
-  // Need at least 6 total votes and clear majority (60%+)
+  // Need at least 4 total votes and clear majority (60%+)
   let signal = 'WAIT';
   let confidence = 0;
 
-  if (totalVotes >= 5 && upPct >= 62) {
+  if (totalVotes >= 4 && upPct >= 60) {
     signal = 'BUY';
     confidence = Math.min(95, Math.round(50 + (upPct - 50) * 1.5));
-  } else if (totalVotes >= 5 && upPct <= 38) {
+  } else if (totalVotes >= 4 && upPct <= 40) {
     signal = 'SELL';
     confidence = Math.min(95, Math.round(50 + (50 - upPct) * 1.5));
   }

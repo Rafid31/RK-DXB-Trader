@@ -54,7 +54,7 @@ async function fetchCandles(symbol, outputsize = 90) {
     const res = await fetch(url, { timeout: 12000 });
     const data = await res.json();
     if (data.status === 'error' || !data.values) {
-      console.warn(`[${symbol}] API: ${data.message || 'no values'}`);
+      console.warn(`[${symbol}] API warn: ${data.message || JSON.stringify(data).slice(0,80)}`);
       return null;
     }
     return data.values.reverse().map(v => ({
@@ -122,7 +122,7 @@ function buildState() {
     return {
       symbol: p.symbol,
       type: p.type || 'forex',
-      price: price ? price.toFixed(price > 10 ? 3 : 5) : '—',
+      price: price ? (price >= 1000 ? price.toFixed(2) : price > 10 ? price.toFixed(3) : price.toFixed(5)) : '—',
       change: +change.toFixed(3),
       signal: signal.signal || 'WAIT', confidence: signal.confidence || 0,
       rsi: signal.rsi, stoch: signal.stoch, macd: signal.macd,
@@ -281,5 +281,5 @@ server.listen(PORT, async () => {
   console.log(`\n🚀 RK DXB Trader v2 — Port ${PORT}`);
   await updateAllPairs();
   console.log('✅ Ready\n');
-  await sendTelegram('🟢 <b>RK DXB Trader v2.2</b>\n\n✅ 8 forex pairs — London/NY sessions\n✅ BTC/ETH — 24/7 Binance live\n✅ Asian session (Tokyo) added\n✅ Single device enforced');
+  await sendTelegram('🟢 <b>RK DXB Trader v3</b>\n\n✅ 10 pairs (8 forex + BTC/ETH)\n✅ All sessions: Sydney/Tokyo/London/NY\n✅ Crypto 24/7 Binance.US\n✅ Improved signal accuracy');
 });

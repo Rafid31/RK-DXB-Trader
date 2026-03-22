@@ -707,16 +707,16 @@
 
 <script>
 // ── Auth Guard ──────────────────────────────────────────
-const AUTH_EMAIL = sessionStorage.getItem('rk_auth_email');
-const AUTH_TOKEN = sessionStorage.getItem('rk_auth_token');
+const AUTH_EMAIL = localStorage.getItem('rk_auth_email');
+const AUTH_TOKEN = localStorage.getItem('rk_auth_token');
 if (!AUTH_EMAIL || !AUTH_TOKEN) {
   window.location.href = 'index.html';
 }
 
 async function logout() {
   try { await fetch('https://rk-dxb-trader.onrender.com/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: AUTH_EMAIL }) }); } catch(e) {}
-  sessionStorage.removeItem('rk_auth_email');
-  sessionStorage.removeItem('rk_auth_token');
+  localStorage.removeItem('rk_auth_email');
+  localStorage.removeItem('rk_auth_token');
   window.location.href = 'index.html';
 }
 
@@ -751,8 +751,8 @@ function connect() {
       if (msg.type === 'auth_failed' || msg.type === 'kicked') {
         updateConnBadge('disconnected', 'Session ended');
         alert(msg.type === 'kicked' ? '⚠️ You were logged in from another device. This session has ended.' : '⚠️ Session expired. Please login again.');
-        sessionStorage.removeItem('rk_auth_email');
-        sessionStorage.removeItem('rk_auth_token');
+        localStorage.removeItem('rk_auth_email');
+        localStorage.removeItem('rk_auth_token');
         window.location.href = 'index.html';
         return;
       }
@@ -801,12 +801,12 @@ function updateTimer(secsRemaining) {
   fill.style.width = pct + '%';
   secsEl.textContent = secs + 's';
 
-  if (secs <= 5) {
+  if (secs <= 10) {
     fill.style.background = '#ff3f5a';
     secsEl.className = 'timer-secs urgent';
     // Show enter-now if there's an active signal
     if (lastState) {
-      const activePairs = lastState.pairs.filter(p => p.signal !== 'WAIT' && p.confidence >= 70);
+      const activePairs = lastState.pairs.filter(p => p.signal !== 'WAIT' && p.confidence >= 78);
       if (activePairs.length > 0 && !enterNowActive) {
         showEnterNow(activePairs[0]);
       }
@@ -856,9 +856,18 @@ function updateSessions(sessions, marketOpen, nextEvent) {
   });
 
   const ms = document.getElementById('marketStatus');
-  if (marketOpen) {
+  // Show which sessions are active
+  const sessionNames = (sessions || []);
+  const hasLondonNY = sessionNames.some(s => s === 'London' || s === 'New York');
+  const hasTokyo = sessionNames.some(s => s === 'Tokyo');
+  const hasSydney = sessionNames.some(s => s === 'Sydney');
+
+  if (marketOpen && (hasLondonNY)) {
     ms.className = 'market-status open';
-    ms.textContent = '● Forex OPEN';
+    ms.textContent = '● High Volume';
+  } else if (marketOpen && (hasTokyo || hasSydney)) {
+    ms.className = 'market-status open';
+    ms.textContent = '● Asian Session';
   } else {
     ms.className = 'market-status closed';
     ms.textContent = '● Forex CLOSED';
@@ -910,7 +919,22 @@ function indClass(name, val) {
 
 function indDisplay(name, val) {
   if (val === null || val === undefined) return '—';
+  // Show real 0 as 0 but null-like values as —
   return String(val);
+}
+
+function formatPrice(price) {
+  if (price === null || price === undefined) return '—';
+  if (price >= 1000) {
+    // Crypto: comma separated, 2 decimals
+    return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } else if (price >= 10) {
+    // JPY pairs: 3 decimals
+    return price.toFixed(3);
+  } else {
+    // Forex: 5 decimals
+    return price.toFixed(5);
+  }
 }
 
 // ── Render a Pair Card ───────────────────────────────────
@@ -941,7 +965,7 @@ function renderCard(p) {
           ${isCrypto ? '<span class="crypto-badge">⚡ Crypto</span><span class="crypto-live-badge" style="margin-left:4px">● LIVE 24/7</span>' : ''}
         </div>
         <div class="price-row">
-          <span class="price-val">${p.price}</span>
+          <span class="price-val">${formatPrice(p.price)}</span>
           <span class="price-change ${changeClass}">${changeStr}</span>
         </div>
       </div>

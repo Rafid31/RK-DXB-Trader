@@ -268,7 +268,7 @@
 
     <p class="footer-note">
       <span class="pulse-dot"></span>
-      Server live — 8 pairs tracking now<br>
+      Server live — 10 pairs tracking now<br>
       Real market only · QX Broker · 1-min expiry
     </p>
 
@@ -293,8 +293,8 @@
       });
       const data = await res.json();
       if (data.ok) {
-        sessionStorage.setItem('rk_auth_email', data.email);
-        sessionStorage.setItem('rk_auth_token', data.token);
+        localStorage.setItem('rk_auth_email', data.email);
+        localStorage.setItem('rk_auth_token', data.token);
         window.location.href = 'dashboard.html';
       } else {
         err.textContent = '⛔ Access denied. Unauthorized email.';
@@ -315,7 +315,7 @@
 
   document.getElementById('email').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
-  if (sessionStorage.getItem('rk_auth_email') && sessionStorage.getItem('rk_auth_token')) {
+  if (localStorage.getItem('rk_auth_email') && localStorage.getItem('rk_auth_token')) {
     window.location.href = 'dashboard.html';
   }
 </script>
