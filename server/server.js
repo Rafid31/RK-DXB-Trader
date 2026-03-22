@@ -42,7 +42,7 @@ PAIRS.forEach(p => {
 // ── Twelve Data Fetcher ──────────────────────────────────────
 async function fetchCandles(symbol, outputsize = 90) {
   const key = getKey();
-  const tdSymbol = symbol.replace('/', '');
+  const tdSymbol = encodeURIComponent(symbol);
   const url = `https://api.twelvedata.com/time_series?symbol=${tdSymbol}&interval=1min&outputsize=${outputsize}&apikey=${key}`;
 
   try {
