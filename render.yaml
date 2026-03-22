@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: rk-dxb-trader-server
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TELEGRAM_TOKEN
+        value: 8701910654:AAE5Xcl3tFRGhtArlOXjFQ9EFlnL3IOBl1U
+      - key: TELEGRAM_CHAT_ID
+        value: "6063240252"

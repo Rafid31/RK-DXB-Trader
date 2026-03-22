@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RK DXB Trader — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #050810;
+    --bg2: #080d1a;
+    --panel: #0d1428;
+    --panel2: #0f1730;
+    --border: rgba(0,180,255,0.10);
+    --border2: rgba(0,180,255,0.18);
+    --accent: #00b4ff;
+    --accent2: #0066ff;
+    --gold: #ffd060;
+    --text: #e8f0ff;
+    --muted: #4a5a80;
+    --muted2: #2a3555;
+    --red: #ff3f5a;
+    --green: #00e676;
+    --yellow: #ffd060;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-head);
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,180,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ─────────────────────────────────── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(5,8,16,0.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .logo-name {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+
+  .logo-tag {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .server-time {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  #clock {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .conn-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid;
+    transition: all 0.3s;
+  }
+
+  .conn-badge.connected { color: var(--green); border-color: rgba(0,230,118,0.3); background: rgba(0,230,118,0.06); }
+  .conn-badge.disconnected { color: var(--red); border-color: rgba(255,63,90,0.3); background: rgba(255,63,90,0.06); }
+  .conn-badge.connecting { color: var(--yellow); border-color: rgba(255,208,96,0.3); background: rgba(255,208,96,0.06); }
+
+  .conn-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .conn-badge.connected .conn-dot { animation: pulse 2s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Session Bar ──────────────────────────────── */
+  .session-bar {
+    position: relative;
+    z-index: 1;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .session-pills {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .session-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+
+  .session-pill {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid;
+    letter-spacing: 0.5px;
+  }
+
+  .session-pill.active {
+    color: var(--green);
+    border-color: rgba(0,230,118,0.4);
+    background: rgba(0,230,118,0.08);
+  }
+
+  .session-pill.inactive {
+    color: var(--muted);
+    border-color: var(--muted2);
+    background: transparent;
+  }
+
+  .market-status {
+    font-size: 12px;
+    font-family: var(--font-mono);
+  }
+
+  .market-status.open { color: var(--green); }
+  .market-status.closed { color: var(--red); }
+
+  .next-event {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--gold);
+  }
+
+  /* ── Candle Timer ──────────────────────────────── */
+  .candle-timer-bar {
+    position: relative;
+    z-index: 1;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .timer-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .timer-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--muted2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .timer-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s linear, background-color 0.3s;
+    background: var(--accent);
+  }
+
+  .timer-secs {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: right;
+    transition: color 0.3s;
+  }
+
+  .timer-secs.urgent { color: var(--red); animation: flash 0.5s infinite; }
+  .timer-secs.warning { color: var(--yellow); }
+  .timer-secs.normal { color: var(--accent); }
+
+  @keyframes flash { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Main Grid ────────────────────────────────── */
+  main {
+    position: relative;
+    z-index: 1;
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .grid-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .grid-title {
+    font-size: 13px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+  }
+
+  .last-updated {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+
+  .pairs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  /* ── Pair Card ────────────────────────────────── */
+  .pair-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    animation: cardIn 0.4s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .pair-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    transition: background 0.3s;
+  }
+
+  .pair-card.signal-buy { border-color: rgba(0,230,118,0.25); box-shadow: 0 0 20px rgba(0,230,118,0.06); }
+  .pair-card.signal-buy::before { background: linear-gradient(90deg, var(--green), transparent); }
+
+  .pair-card.signal-sell { border-color: rgba(255,63,90,0.25); box-shadow: 0 0 20px rgba(255,63,90,0.06); }
+  .pair-card.signal-sell::before { background: linear-gradient(90deg, var(--red), transparent); }
+
+  .pair-card.signal-wait { border-color: var(--border); }
+  .pair-card.signal-wait::before { background: linear-gradient(90deg, var(--muted2), transparent); }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .pair-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    font-family: var(--font-mono);
+  }
+
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .price-val {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .price-change {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .price-change.up { color: var(--green); }
+  .price-change.down { color: var(--red); }
+  .price-change.flat { color: var(--muted); }
+
+  /* Signal Badge */
+  .signal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    letter-spacing: 1px;
+    border: 1px solid;
+    transition: all 0.3s;
+  }
+
+  .signal-badge.buy {
+    color: var(--green);
+    background: rgba(0,230,118,0.1);
+    border-color: rgba(0,230,118,0.35);
+  }
+
+  .signal-badge.sell {
+    color: var(--red);
+    background: rgba(255,63,90,0.1);
+    border-color: rgba(255,63,90,0.35);
+  }
+
+  .signal-badge.wait {
+    color: var(--muted);
+    background: rgba(74,90,128,0.1);
+    border-color: rgba(74,90,128,0.25);
+  }
+
+  /* Confidence bar */
+  .conf-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 12px;
+  }
+
+  .conf-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .conf-track {
+    flex: 1;
+    height: 5px;
+    background: var(--muted2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+
+  .conf-pct {
+    font-size: 13px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* Indicator grid */
+  .indicators {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .ind-chip {
+    background: var(--bg2);
+    border: 1px solid var(--muted2);
+    border-radius: 6px;
+    padding: 5px 6px;
+    text-align: center;
+  }
+
+  .ind-name {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .ind-val {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+
+  .ind-val.bull { color: var(--green); }
+  .ind-val.bear { color: var(--red); }
+  .ind-val.neutral { color: var(--muted); }
+
+  /* Reasons */
+  .reasons {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .reason-tag {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--bg2);
+    color: var(--muted);
+    border: 1px solid var(--muted2);
+  }
+
+  .streak-tag {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+
+  .streak-tag.bull { background: rgba(0,230,118,0.1); color: var(--green); border: 1px solid rgba(0,230,118,0.2); }
+  .streak-tag.bear { background: rgba(255,63,90,0.1); color: var(--red); border: 1px solid rgba(255,63,90,0.2); }
+
+  /* ── Enter Now Alert ─────────────────────────── */
+  .enter-now {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: linear-gradient(135deg, var(--green), #00a050);
+    color: #000;
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: 18px;
+    padding: 16px 40px;
+    border-radius: 40px;
+    box-shadow: 0 0 40px rgba(0,230,118,0.5);
+    z-index: 999;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+
+  .enter-now.sell-now {
+    background: linear-gradient(135deg, var(--red), #cc1030);
+    color: #fff;
+    box-shadow: 0 0 40px rgba(255,63,90,0.5);
+  }
+
+  .enter-now.visible {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Market Closed Overlay ────────────────────── */
+  .market-closed {
+    position: fixed;
+    inset: 0;
+    background: rgba(5,8,16,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    display: none;
+  }
+
+  .market-closed h2 {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--muted);
+  }
+
+  .market-closed p {
+    font-size: 14px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+
+  /* ── Logout ──────────────────────────────────── */
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--muted2);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+
+  .logout-btn:hover { border-color: var(--muted); color: var(--text); }
+
+  /* ── Responsive ───────────────────────────────── */
+  @media (max-width: 600px) {
+    header { padding: 0 16px; }
+    main { padding: 16px; }
+    .pairs-grid { grid-template-columns: 1fr; gap: 12px; }
+    .header-right .server-time { display: none; }
+    .session-bar { padding: 8px 16px; }
+    .candle-timer-bar { padding: 8px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────── -->
+<header>
+  <div class="header-left">
+    <div class="logo-icon">📊</div>
+    <div>
+      <div class="logo-name">RK DXB Trader</div>
+      <div class="logo-tag">Real Market · QX Broker</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="server-time">UTC <span id="clock">--:--:--</span></div>
+    <div class="conn-badge connecting" id="connBadge">
+      <div class="conn-dot"></div>
+      <span id="connText">Connecting</span>
+    </div>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<!-- ── Session Bar ─────────────────────────────────────── -->
+<div class="session-bar">
+  <div class="session-pills">
+    <span class="session-label">Sessions:</span>
+    <span class="session-pill inactive" id="sess-london">🇬🇧 London</span>
+    <span class="session-pill inactive" id="sess-newYork">🇺🇸 New York</span>
+    <span class="session-pill inactive" id="sess-tokyo">🇯🇵 Tokyo</span>
+    <span class="session-pill inactive" id="sess-sydney">🇦🇺 Sydney</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="next-event" id="nextEvent">⏳ Loading...</div>
+    <div class="market-status" id="marketStatus">—</div>
+  </div>
+</div>
+
+<!-- ── Candle Timer ────────────────────────────────────── -->
+<div class="candle-timer-bar">
+  <span class="timer-label">Next candle in</span>
+  <div class="timer-bar-track">
+    <div class="timer-bar-fill" id="timerFill" style="width:100%"></div>
+  </div>
+  <span class="timer-secs normal" id="timerSecs">--s</span>
+</div>
+
+<!-- ── Pairs Grid ─────────────────────────────────────── -->
+<main>
+  <div class="grid-header">
+    <span class="grid-title">// Live Signals — 1min Real Market</span>
+    <span class="last-updated" id="lastUpdated">Waiting for data...</span>
+  </div>
+  <div class="pairs-grid" id="pairsGrid">
+    <!-- Cards injected by JS -->
+  </div>
+</main>
+
+<!-- ── Enter Now Alert ────────────────────────────────── -->
+<div class="enter-now" id="enterNow">⚡ ENTER NOW</div>
+
+<!-- ── Market Closed ─────────────────────────────────── -->
+<div class="market-closed" id="marketClosed">
+  <div style="font-size:48px">😴</div>
+  <h2>Market Closed</h2>
+  <p>Signals resume when London or New York session opens.</p>
+  <div id="closedNextEvent" style="font-family:var(--font-mono);font-size:13px;color:var(--gold)"></div>
+</div>
+
+<script>
+// ── Auth Guard ──────────────────────────────────────────
+if (!sessionStorage.getItem('rk_auth')) {
+  window.location.href = 'index.html';
+}
+
+function logout() {
+  sessionStorage.removeItem('rk_auth');
+  window.location.href = 'index.html';
+}
+
+// ── WebSocket Connection ────────────────────────────────
+// Replace YOUR_RENDER_URL with your actual Render URL after deployment
+const WS_URL = (window.location.hostname === 'localhost')
+  ? 'ws://localhost:3001'
+  : 'wss://rk-dxb-trader-server.onrender.com';
+
+let ws, reconnectTimer;
+let lastState = null;
+let enterNowActive = false;
+
+function connect() {
+  updateConnBadge('connecting', 'Connecting');
+
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    updateConnBadge('connected', 'Live');
+    clearTimeout(reconnectTimer);
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const state = JSON.parse(e.data);
+      lastState = state;
+      renderState(state);
+    } catch(err) {
+      console.error('Parse error:', err);
+    }
+  };
+
+  ws.onclose = () => {
+    updateConnBadge('disconnected', 'Reconnecting');
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function updateConnBadge(cls, text) {
+  const badge = document.getElementById('connBadge');
+  badge.className = 'conn-badge ' + cls;
+  document.getElementById('connText').textContent = text;
+}
+
+// ── Clock ────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getUTCHours()).padStart(2,'0');
+  const m = String(now.getUTCMinutes()).padStart(2,'0');
+  const s = String(now.getUTCSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Candle Timer ─────────────────────────────────────────
+function updateTimer(secsRemaining) {
+  const secs = secsRemaining || (60 - new Date().getUTCSeconds());
+  const pct = (secs / 60) * 100;
+
+  const fill = document.getElementById('timerFill');
+  const secsEl = document.getElementById('timerSecs');
+
+  fill.style.width = pct + '%';
+  secsEl.textContent = secs + 's';
+
+  if (secs <= 5) {
+    fill.style.background = '#ff3f5a';
+    secsEl.className = 'timer-secs urgent';
+    // Show enter-now if there's an active signal
+    if (lastState) {
+      const activePairs = lastState.pairs.filter(p => p.signal !== 'WAIT' && p.confidence >= 70);
+      if (activePairs.length > 0 && !enterNowActive) {
+        showEnterNow(activePairs[0]);
+      }
+    }
+  } else if (secs <= 15) {
+    fill.style.background = '#ffd060';
+    secsEl.className = 'timer-secs warning';
+    hideEnterNow();
+  } else {
+    fill.style.background = 'var(--accent)';
+    secsEl.className = 'timer-secs normal';
+    hideEnterNow();
+  }
+}
+
+setInterval(() => {
+  if (!lastState) updateTimer(60 - new Date().getUTCSeconds());
+}, 1000);
+
+// ── Enter Now Alert ──────────────────────────────────────
+function showEnterNow(pair) {
+  if (enterNowActive) return;
+  enterNowActive = true;
+  const el = document.getElementById('enterNow');
+  const isBuy = pair.signal === 'BUY';
+  el.textContent = isBuy ? `⚡ ${pair.symbol} — CALL NOW` : `⚡ ${pair.symbol} — PUT NOW`;
+  el.className = 'enter-now' + (isBuy ? '' : ' sell-now') + ' visible';
+  setTimeout(hideEnterNow, 6000);
+}
+
+function hideEnterNow() {
+  enterNowActive = false;
+  const el = document.getElementById('enterNow');
+  el.classList.remove('visible');
+}
+
+// ── Session Pills ────────────────────────────────────────
+function updateSessions(sessions, marketOpen, nextEvent) {
+  const all = ['london','newYork','tokyo','sydney'];
+  const active = (sessions || []).map(s => s.toLowerCase().replace(' ',''));
+
+  all.forEach(s => {
+    const el = document.getElementById('sess-' + s);
+    if (!el) return;
+    const isActive = active.some(a => a.includes(s.toLowerCase().replace('newyork','new')));
+    el.className = 'session-pill ' + (isActive ? 'active' : 'inactive');
+  });
+
+  const ms = document.getElementById('marketStatus');
+  if (marketOpen) {
+    ms.className = 'market-status open';
+    ms.textContent = '● Market OPEN';
+  } else {
+    ms.className = 'market-status closed';
+    ms.textContent = '● Market CLOSED';
+  }
+
+  if (nextEvent) {
+    const mins = nextEvent.minutesAway;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    document.getElementById('nextEvent').textContent = `⏳ ${nextEvent.name} in ${timeStr}`;
+    document.getElementById('closedNextEvent').textContent = `${nextEvent.name} in ${timeStr}`;
+  }
+
+  // Market closed overlay - only show outside ALL sessions
+  const closedOverlay = document.getElementById('marketClosed');
+  closedOverlay.style.display = marketOpen ? 'none' : 'flex';
+}
+
+// ── Confidence Fill Color ────────────────────────────────
+function confColor(pct) {
+  if (pct >= 80) return '#00e676';
+  if (pct >= 65) return '#ffd060';
+  return '#4a5a80';
+}
+
+// ── Indicator Value Format ───────────────────────────────
+function indClass(name, val) {
+  if (val === null || val === undefined) return 'neutral';
+  switch(name) {
+    case 'rsi':
+      return val < 40 ? 'bull' : val > 60 ? 'bear' : 'neutral';
+    case 'stoch':
+      return val < 30 ? 'bull' : val > 70 ? 'bear' : 'neutral';
+    case 'wr':
+      return val < -70 ? 'bull' : val > -30 ? 'bear' : 'neutral';
+    case 'cci':
+      return val < -80 ? 'bull' : val > 80 ? 'bear' : 'neutral';
+    case 'macd':
+      return val === 'UP' ? 'bull' : val === 'DN' ? 'bear' : 'neutral';
+    case 'ema':
+      return val === 'bullish' ? 'bull' : val === 'bearish' ? 'bear' : 'neutral';
+    case 'bb':
+      return val === 'BELOW' ? 'bull' : val === 'ABOVE' ? 'bear' : 'neutral';
+  }
+  return 'neutral';
+}
+
+function indDisplay(name, val) {
+  if (val === null || val === undefined) return '—';
+  return String(val);
+}
+
+// ── Render a Pair Card ───────────────────────────────────
+function renderCard(p) {
+  const sigClass = p.signal === 'BUY' ? 'buy' : p.signal === 'SELL' ? 'sell' : 'wait';
+  const cardClass = 'pair-card signal-' + p.signal.toLowerCase();
+
+  const changeStr = p.change >= 0
+    ? `+${p.change.toFixed(3)}%`
+    : `${p.change.toFixed(3)}%`;
+  const changeClass = p.change > 0 ? 'up' : p.change < 0 ? 'down' : 'flat';
+
+  const streakHtml = p.streak !== 0 ? `<span class="streak-tag ${p.streak > 0 ? 'bull' : 'bear'}">
+    ${p.streak > 0 ? '▲'.repeat(Math.min(p.streak,5)) : '▼'.repeat(Math.min(Math.abs(p.streak),5))} ${Math.abs(p.streak)} candle streak
+  </span>` : '';
+
+  const reasonsHtml = (p.reasons || []).map(r =>
+    `<span class="reason-tag">${r}</span>`
+  ).join('');
+
+  return `
+  <div class="${cardClass}" id="card-${p.symbol.replace('/','_')}">
+    <div class="card-top">
+      <div>
+        <div class="pair-name">${p.symbol.replace('/','/​')}</div>
+        <div class="price-row">
+          <span class="price-val">${p.price}</span>
+          <span class="price-change ${changeClass}">${changeStr}</span>
+        </div>
+      </div>
+      <div>
+        <span class="signal-badge ${sigClass}">
+          ${p.signal === 'BUY' ? '▲' : p.signal === 'SELL' ? '▼' : '⏸'}
+          ${p.signal}
+        </span>
+      </div>
+    </div>
+
+    <div class="conf-row">
+      <span class="conf-label">Confidence</span>
+      <div class="conf-track">
+        <div class="conf-fill" style="width:${p.confidence}%;background:${confColor(p.confidence)}"></div>
+      </div>
+      <span class="conf-pct" style="color:${confColor(p.confidence)}">${p.confidence}%</span>
+    </div>
+
+    <div class="indicators">
+      <div class="ind-chip">
+        <span class="ind-name">RSI</span>
+        <span class="ind-val ${indClass('rsi', p.rsi)}">${indDisplay('rsi', p.rsi)}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">Stoch</span>
+        <span class="ind-val ${indClass('stoch', p.stoch)}">${indDisplay('stoch', p.stoch)}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">W%R</span>
+        <span class="ind-val ${indClass('wr', p.wr)}">${indDisplay('wr', p.wr)}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">CCI</span>
+        <span class="ind-val ${indClass('cci', p.cci)}">${indDisplay('cci', p.cci)}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">MACD</span>
+        <span class="ind-val ${indClass('macd', p.macd)}">${indDisplay('macd', p.macd)}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">EMA</span>
+        <span class="ind-val ${indClass('ema', p.emaTrend)}">${p.emaTrend || '—'}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">BB</span>
+        <span class="ind-val ${indClass('bb', p.bbPos)}">${indDisplay('bb', p.bbPos)}</span>
+      </div>
+      <div class="ind-chip">
+        <span class="ind-name">Pattern</span>
+        <span class="ind-val neutral" style="font-size:9px">${(p.pattern || 'none').replace(/_/g,' ')}</span>
+      </div>
+    </div>
+
+    ${(reasonsHtml || streakHtml) ? `
+    <div class="reasons">
+      ${streakHtml}
+      ${reasonsHtml}
+    </div>` : ''}
+  </div>`;
+}
+
+// ── Render Full State ────────────────────────────────────
+function renderState(state) {
+  if (!state || !state.pairs) return;
+
+  // Sessions
+  updateSessions(state.sessions, state.marketOpen, state.nextEvent);
+
+  // Timer
+  if (state.secsRemainingInCandle) updateTimer(state.secsRemainingInCandle);
+
+  // Last updated
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent =
+    `Updated ${now.getUTCHours().toString().padStart(2,'0')}:${now.getUTCMinutes().toString().padStart(2,'0')} UTC`;
+
+  // Render cards — update existing or rebuild
+  const grid = document.getElementById('pairsGrid');
+  const existing = grid.querySelectorAll('.pair-card');
+
+  if (existing.length === state.pairs.length) {
+    // Update in place (no flicker)
+    state.pairs.forEach((p, i) => {
+      const cardEl = grid.children[i];
+      const newHtml = renderCard(p);
+      // Only re-render if signal changed
+      const oldSig = cardEl.dataset.sig;
+      const newSig = p.signal + p.confidence;
+      if (oldSig !== newSig) {
+        cardEl.outerHTML = renderCard(p);
+        const updated = grid.children[i];
+        if (updated) updated.dataset.sig = newSig;
+      }
+    });
+  } else {
+    // First render
+    grid.innerHTML = state.pairs.map(renderCard).join('');
+    state.pairs.forEach((p, i) => {
+      const card = grid.children[i];
+      if (card) card.dataset.sig = p.signal + p.confidence;
+    });
+  }
+}
+
+// ── Start ────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RK DXB Trader — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #050810;
+    --bg2: #0a0f1e;
+    --panel: #0d1428;
+    --border: rgba(0,180,255,0.12);
+    --accent: #00b4ff;
+    --accent2: #0066ff;
+    --gold: #ffd060;
+    --text: #e8f0ff;
+    --muted: #4a5a80;
+    --red: #ff3f5a;
+    --green: #00e676;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-head);
+    overflow: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb1 { width: 400px; height: 400px; background: var(--accent); top: -100px; right: -100px; animation: drift1 12s ease-in-out infinite; }
+  .orb2 { width: 300px; height: 300px; background: var(--accent2); bottom: -80px; left: -80px; animation: drift2 15s ease-in-out infinite; }
+
+  @keyframes drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,40px)} }
+  @keyframes drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-30px)} }
+
+  .login-wrap {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 40px 40px;
+    box-shadow: 0 0 60px rgba(0,100,255,0.08);
+    animation: fadeUp 0.5s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 36px;
+  }
+
+  .logo-icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-name {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 36px;
+    font-family: var(--font-mono);
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+  }
+
+  input[type="email"] {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-size: 15px;
+    font-family: var(--font-mono);
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 24px;
+  }
+
+  input[type="email"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,180,255,0.08);
+  }
+
+  input[type="email"]::placeholder { color: var(--muted); }
+
+  .btn-login {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-family: var(--font-head);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-login:active { transform: translateY(0); }
+
+  .error-msg {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(255,63,90,0.1);
+    border: 1px solid rgba(255,63,90,0.3);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--red);
+    font-family: var(--font-mono);
+    display: none;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 32px 0 24px;
+  }
+
+  .footer-note {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .pulse-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 2s ease-in-out infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes pulse {
+    0%,100%{opacity:1; transform:scale(1)}
+    50%{opacity:0.5; transform:scale(1.4)}
+  }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<div class="login-wrap">
+  <div class="login-card">
+
+    <div class="logo-row">
+      <div class="logo-icon">📊</div>
+      <div class="logo-text">
+        <span class="logo-name">RK DXB Trader</span>
+        <span class="logo-sub">Signal Intelligence</span>
+      </div>
+    </div>
+
+    <h1>Access Signals</h1>
+    <p class="subtitle">// Real market. Real signals. 1-minute binary.</p>
+
+    <label for="email">Your Email</label>
+    <input
+      type="email"
+      id="email"
+      placeholder="you@example.com"
+      autocomplete="email"
+      spellcheck="false"
+    />
+
+    <button class="btn-login" onclick="login()">Enter Dashboard →</button>
+
+    <div class="error-msg" id="error">
+      ⛔ Access denied. Unauthorized email.
+    </div>
+
+    <div class="divider"></div>
+
+    <p class="footer-note">
+      <span class="pulse-dot"></span>
+      Server live — 8 pairs tracking now<br>
+      Real market only · QX Broker · 1-min expiry
+    </p>
+
+  </div>
+</div>
+
+<script>
+  // Authorized emails (add more here if needed later)
+  const AUTHORIZED = ['rafhidk.rk@gmail.com'];
+
+  function login() {
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    const err = document.getElementById('error');
+
+    if (AUTHORIZED.includes(email)) {
+      sessionStorage.setItem('rk_auth', email);
+      window.location.href = 'dashboard.html';
+    } else {
+      err.style.display = 'block';
+      document.getElementById('email').style.borderColor = 'var(--red)';
+      setTimeout(() => {
+        err.style.display = 'none';
+        document.getElementById('email').style.borderColor = 'var(--border)';
+      }, 3000);
+    }
+  }
+
+  // Enter key support
+  document.getElementById('email').addEventListener('keydown', e => {
+    if (e.key === 'Enter') login();
+  });
+
+  // If already logged in, go straight to dashboard
+  if (sessionStorage.getItem('rk_auth')) {
+    window.location.href = 'dashboard.html';
+  }
+</script>
+</body>
+</html>
