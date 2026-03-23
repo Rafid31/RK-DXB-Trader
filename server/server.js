@@ -12,6 +12,7 @@ const cron = require('node-cron');
 const { getKey } = require('./apiKeys');
 const { fetchCryptoCandles } = require('./binance');
 const { updateAllOTC, getOTCState } = require('./poOTC');
+const { processTicks: qxProcessTicks, getQXState } = require('./qxEngine');
 const { calculateSignal } = require('./signalEngine');
 const { getCurrentSessions, isMarketOpen, isForexOpen, isHighVolatilitySession, getNextSessionEvent, getSessionAlerts } = require('./sessions');
 const { sendTelegram, formatSignalAlert, formatSessionAlert } = require('./telegram');
@@ -160,16 +161,22 @@ app.get('/', (req, res) => res.json({
 app.get('/api/signals', (req, res) => res.json(buildState()));
 app.get('/api/otc', (req, res) => res.json({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() }));
 
-// QX test endpoint - tests if Render can reach qxbroker.com
-app.get('/api/qx-test', async (req, res) => {
+// QX: Receive ticks from Chrome extension (POST)
+app.post('/api/qx-push', (req, res) => {
   try {
-    const { testQXWebSocket } = require('./qxTest');
-    const result = await testQXWebSocket();
-    res.json({ success: true, result });
+    const { ticks } = req.body || {};
+    if (ticks && ticks.length) {
+      qxProcessTicks(ticks);
+      broadcastQX();
+    }
+    res.json({ ok: true, received: ticks?.length || 0 });
   } catch(e) {
-    res.json({ success: false, error: e.message });
+    res.json({ ok: false, error: e.message });
   }
 });
+
+// QX: Get current state (GET)
+app.get('/api/qx', (req, res) => res.json(getQXState()));
 
 // ── Auth endpoints ───────────────────────────────────────────
 app.post('/api/auth/login', (req, res) => {
@@ -275,6 +282,11 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { wsClients.delete(ws); });
   ws.on('error', () => wsClients.delete(ws));
 });
+
+function broadcastQX() {
+  const state = JSON.stringify(getQXState());
+  for (const [ws] of wsClients) { if (ws.readyState === 1) ws.send(state); }
+}
 
 function broadcastOTC() {
   const state = JSON.stringify({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() });
