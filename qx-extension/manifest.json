@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "RK DXB QX Signal Pro",
+  "version": "2.0",
+  "description": "Captures all QX OTC pairs for RK DXB Trader",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://qxbroker.com/*",
+    "https://rk-dxb-trader.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://qxbroker.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["https://qxbroker.com/*"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RK DXB QX Signal Pro",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

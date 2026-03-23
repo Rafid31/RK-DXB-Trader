@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:240px; background:#0a0f1e; color:#eef2ff; font-family:'Segoe UI',sans-serif; padding:12px; }
+.header { display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid rgba(255,140,0,0.2); }
+.icon { width:24px; height:24px; background:linear-gradient(135deg,#ff8c00,#ff4500); border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; font-weight:700; }
+.title { font-size:13px; font-weight:700; }
+.sub { font-size:9px; color:#ff8c00; letter-spacing:1px; }
+.row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.label { font-size:11px; color:#4a5a80; }
+.val { font-size:12px; font-weight:700; font-family:monospace; }
+.green { color:#00e676; }
+.orange { color:#ff8c00; }
+.pairs { margin-top:8px; }
+.ptitle { font-size:9px; color:#4a5a80; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; }
+.pgrid { display:flex; flex-wrap:wrap; gap:3px; }
+.chip { font-size:9px; font-family:monospace; padding:2px 5px; border-radius:3px; background:rgba(0,230,118,0.08); color:#00e676; border:1px solid rgba(0,230,118,0.2); }
+.status { margin-top:8px; padding:6px 10px; border-radius:6px; font-size:10px; font-family:monospace; }
+.status.on { background:rgba(0,230,118,0.07); color:#00e676; border:1px solid rgba(0,230,118,0.2); }
+.status.off { background:rgba(255,63,90,0.07); color:#ff3f5a; border:1px solid rgba(255,63,90,0.2); }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="icon">RK</div>
+  <div>
+    <div class="title">RK DXB QX Signal Pro</div>
+    <div class="sub">v2.0 ALL OTC PAIRS</div>
+  </div>
+</div>
+<div class="row"><span class="label">Active Pairs</span><span class="val green" id="pairs">-</span></div>
+<div class="row"><span class="label">Total Sent</span><span class="val orange" id="sent">-</span></div>
+<div class="row"><span class="label">Last Update</span><span class="val" id="time" style="color:#4a5a80">-</span></div>
+<div class="pairs">
+  <div class="ptitle">Captured Pairs</div>
+  <div class="pgrid" id="grid"><span style="color:#4a5a80;font-size:10px">Open QX...</span></div>
+</div>
+<div class="status off" id="status">Open qxbroker.com/en/trade</div>
+<script src="popup.js"></script>
+</body>
+</html>
