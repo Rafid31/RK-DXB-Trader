@@ -202,7 +202,7 @@ async function updateOTCPair(symbol) {
   // Recalculate signal every 2 ticks
   if (updateCount % 2 === 0) {
     const result = calcOTCSignal(symbol);
-    lastSignals[symbol] = { ...result, slope: slope.toFixed(3), slopeDir, slopeStrong, updatedAt: new Date().toISOString() };
+    lastSignals[symbol] = { ...result, slope: parseFloat(slope.toFixed(3)), slopeDir, slopeStrong, updatedAt: new Date().toISOString() };
   }
 }
 
@@ -244,9 +244,9 @@ function getOTCState() {
       pattern: signal.pattern,
       reasons: signal.reasons || [],
       updatedAt: signal.updatedAt || null,
-      slope: lastSlopes[symbol]?.slope || 0,
+      slope: parseFloat(lastSlopes[symbol]?.slope || 0),
       slopeDir: lastSlopes[symbol]?.slopeDir || 'FLAT',
-      slopeStrong: lastSlopes[symbol]?.slopeStrong || false,
+      slopeStrong: !!lastSlopes[symbol]?.slopeStrong,
       isOTC: true,
       isCrypto: symbol.includes('BTC') || symbol.includes('ETH')
     };

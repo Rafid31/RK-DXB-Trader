@@ -395,7 +395,7 @@ function slopeBar(slope, slopeDir) {
   return `<div class="slope-bar-wrap">
     <div class="slope-bar-lbl">
       <span class="slope-bar-name">MOMENTUM SLOPE</span>
-      <span class="slope-bar-val" style="color:var(--${slopeDir==='UP'?'buy':slopeDir==='DOWN'?'sell':'muted'})">${slopeDir} (${slope})</span>
+      <span class="slope-bar-val" style="color:var(--${slopeDir==='UP'?'buy':slopeDir==='DOWN'?'sell':'muted'})">${slopeDir} (${(slope||0).toFixed ? (slope||0).toFixed(2) : slope})</span>
     </div>
     <div class="slope-track">
       <div class="slope-fill ${col}" style="${style}"></div>
