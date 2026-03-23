@@ -152,6 +152,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/ping', (req, res) => res.send('ok'));
 app.get('/', (req, res) => res.json({
   status: 'running', pairs: PAIRS.length,
   market: isMarketOpen() ? 'OPEN' : 'CLOSED',
