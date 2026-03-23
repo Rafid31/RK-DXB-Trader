@@ -160,6 +160,17 @@ app.get('/', (req, res) => res.json({
 app.get('/api/signals', (req, res) => res.json(buildState()));
 app.get('/api/otc', (req, res) => res.json({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() }));
 
+// QX test endpoint - tests if Render can reach qxbroker.com
+app.get('/api/qx-test', async (req, res) => {
+  try {
+    const { testQXWebSocket } = require('./qxTest');
+    const result = await testQXWebSocket();
+    res.json({ success: true, result });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 // ── Auth endpoints ───────────────────────────────────────────
 app.post('/api/auth/login', (req, res) => {
   const { email } = req.body;
