@@ -321,5 +321,5 @@ server.listen(PORT, async () => {
   console.log('Loading initial OTC data...');
   await updateAllOTC();
   console.log('✅ OTC ready\n');
-    await sendTelegram('🟢 <b>RK DXB Trader v3.1</b>\n\n✅ 10 real market pairs\n✅ 12 PO OTC pairs (new!)\n✅ OTC data from po-static.com\n✅ 24/7 all markets');
+    await sendTelegram('🟢 <b>RK DXB Trader v3.2</b>\n\n✅ 10 real market pairs\n✅ 12 PO OTC pairs (new!)\n✅ OTC data from po-static.com\n✅ 24/7 all markets');
 });
