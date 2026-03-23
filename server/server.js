@@ -20,7 +20,7 @@ const { sendTelegram, formatSignalAlert, formatSessionAlert } = require('./teleg
 const PORT = process.env.PORT || 3001;
 
 // ── Authorized users ─────────────────────────────────────────
-let authorizedEmails = new Set(['rafhidk.rk@gmail.com']);
+let authorizedEmails = new Set(['rafhidk.rk@gmail.com', 'rafiddxb2@gmail.com']);
 
 // ── Active sessions: email -> { token, ip, connectedAt } ────
 const activeSessions = new Map();
