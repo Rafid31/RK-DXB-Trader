@@ -11,6 +11,7 @@ const cron = require('node-cron');
 
 const { getKey } = require('./apiKeys');
 const { fetchCryptoCandles } = require('./binance');
+const { updateAllOTC, getOTCState } = require('./poOTC');
 const { calculateSignal } = require('./signalEngine');
 const { getCurrentSessions, isMarketOpen, isForexOpen, isHighVolatilitySession, getNextSessionEvent, getSessionAlerts } = require('./sessions');
 const { sendTelegram, formatSignalAlert, formatSessionAlert } = require('./telegram');
@@ -157,6 +158,7 @@ app.get('/', (req, res) => res.json({
 }));
 
 app.get('/api/signals', (req, res) => res.json(buildState()));
+app.get('/api/otc', (req, res) => res.json({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() }));
 
 // ── Auth endpoints ───────────────────────────────────────────
 app.post('/api/auth/login', (req, res) => {
@@ -263,6 +265,11 @@ wss.on('connection', (ws, req) => {
   ws.on('error', () => wsClients.delete(ws));
 });
 
+function broadcastOTC() {
+  const state = JSON.stringify({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() });
+  for (const [ws] of wsClients) { if (ws.readyState === 1) ws.send(state); }
+}
+
 function broadcast() {
   const state = JSON.stringify(buildState());
   for (const [ws] of wsClients) { if (ws.readyState === 1) ws.send(state); }
@@ -271,6 +278,16 @@ function broadcast() {
 // ── Cron ─────────────────────────────────────────────────────
 cron.schedule('* * * * *', async () => { await updateAllPairs(); broadcast(); });
 cron.schedule('* * * * * *', () => { broadcast(); });
+
+// Update OTC every 2 seconds (po-static.com updates each second, 2s gives buffer)
+let otcTick = 0;
+cron.schedule('* * * * * *', async () => {
+  otcTick++;
+  if (otcTick % 2 === 0) {
+    await updateAllOTC();
+    broadcastOTC();
+  }
+});
 cron.schedule('* * * * *', async () => {
   const alerts = getSessionAlerts();
   for (const alert of alerts) await sendTelegram(formatSessionAlert(alert.msg));
@@ -281,5 +298,9 @@ server.listen(PORT, async () => {
   console.log(`\n🚀 RK DXB Trader v2 — Port ${PORT}`);
   await updateAllPairs();
   console.log('✅ Ready\n');
-  await sendTelegram('🟢 <b>RK DXB Trader v3</b>\n\n✅ 10 pairs (8 forex + BTC/ETH)\n✅ All sessions: Sydney/Tokyo/London/NY\n✅ Crypto 24/7 Binance.US\n✅ Improved signal accuracy');
+  // Start OTC data collection
+  console.log('Loading initial OTC data...');
+  await updateAllOTC();
+  console.log('✅ OTC ready\n');
+    await sendTelegram('🟢 <b>RK DXB Trader v3.1</b>\n\n✅ 10 real market pairs\n✅ 12 PO OTC pairs (new!)\n✅ OTC data from po-static.com\n✅ 24/7 all markets');
 });

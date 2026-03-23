@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RK DXB Trader — OTC Signals</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#03060f;--panel:#080e1f;--panel2:#0d1528;
+  --border:rgba(255,140,0,0.12);--border2:rgba(255,140,0,0.25);
+  --accent:#ff8c00;--accent2:#ffb347;
+  --buy:#00e676;--sell:#ff3f5a;--wait:#4a5a80;
+  --text:#eef2ff;--muted:#4a5a80;--muted2:#2a3550;
+  --gold:#ffd060;--cyan:#00d4ff;--purple:#a855f7;
+  --font-head:'Syne',sans-serif;--font-mono:'Space Mono',monospace;
+  --red:#ff3f5a;--green:#00e676;
+}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-head)}
+body::before{content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 40% at 50% -10%,rgba(255,140,0,0.06),transparent),
+             radial-gradient(ellipse 60% 30% at 80% 100%,rgba(255,63,90,0.04),transparent);
+  pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(255,140,0,0.02) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,140,0,0.02) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none;z-index:0}
+
+/* ── HEADER ── */
+.header{position:sticky;top:0;z-index:100;
+  background:rgba(3,6,15,0.95);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:0 24px;height:56px;display:flex;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#ff5500);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.logo-text{font-size:15px;font-weight:800;letter-spacing:-0.3px}
+.logo-sub{font-size:9px;font-family:var(--font-mono);color:var(--accent);letter-spacing:2px;margin-top:-2px}
+.otc-badge{padding:3px 10px;background:rgba(255,140,0,0.12);border:1px solid rgba(255,140,0,0.35);
+  border-radius:6px;font-size:10px;font-family:var(--font-mono);color:var(--accent);letter-spacing:1px}
+.spacer{flex:1}
+.header-right{display:flex;align-items:center;gap:12px}
+.utc-clock{font-family:var(--font-mono);font-size:13px;color:var(--cyan)}
+.conn-badge{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;
+  font-size:11px;font-family:var(--font-mono);border:1px solid;transition:all 0.3s}
+.conn-badge.connected{background:rgba(0,230,118,0.08);border-color:rgba(0,230,118,0.3);color:var(--buy)}
+.conn-badge.connecting{background:rgba(255,208,96,0.08);border-color:rgba(255,208,96,0.3);color:var(--gold)}
+.conn-badge.disconnected{background:rgba(255,63,90,0.08);border-color:rgba(255,63,90,0.3);color:var(--sell)}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.conn-badge.connected .conn-dot{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.back-btn{padding:6px 14px;background:transparent;border:1px solid var(--border2);border-radius:8px;
+  color:var(--text);font-family:var(--font-head);font-size:12px;font-weight:700;cursor:pointer;
+  text-decoration:none;display:flex;align-items:center;gap:6px}
+.back-btn:hover{background:rgba(255,140,0,0.08);border-color:var(--accent)}
+.logout-btn{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:8px;
+  color:var(--muted);font-family:var(--font-head);font-size:12px;cursor:pointer}
+.logout-btn:hover{border-color:var(--sell);color:var(--sell)}
+
+/* ── TOP BAR ── */
+.top-bar{position:relative;z-index:1;padding:10px 24px;
+  background:rgba(8,14,31,0.8);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.po-badge{display:flex;align-items:center;gap:8px;
+  padding:4px 12px;border-radius:20px;
+  background:rgba(255,140,0,0.08);border:1px solid var(--border2);
+  font-size:11px;font-family:var(--font-mono);color:var(--accent)}
+.po-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite}
+.candle-bar-wrap{flex:1;min-width:200px;max-width:500px}
+.candle-label{font-size:10px;font-family:var(--font-mono);color:var(--muted);margin-bottom:4px;
+  display:flex;justify-content:space-between}
+.candle-bar-track{height:4px;background:var(--muted2);border-radius:2px;overflow:hidden}
+.candle-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  border-radius:2px;transition:width 0.9s linear}
+.candle-bar-fill.urgent{background:linear-gradient(90deg,var(--sell),#ff6b35)}
+.timer-secs{font-family:var(--font-mono);font-size:13px;color:var(--accent);margin-left:8px}
+.timer-secs.urgent{color:var(--sell);animation:blink 0.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.data-source{font-size:10px;font-family:var(--font-mono);color:var(--muted);margin-left:auto}
+.data-source span{color:var(--accent)}
+
+/* ── ENTER NOW FLASH ── */
+.enter-now{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);
+  z-index:999;padding:14px 32px;border-radius:12px;
+  background:linear-gradient(135deg,var(--buy),#00b359);
+  font-size:16px;font-weight:800;font-family:var(--font-head);color:#000;
+  box-shadow:0 0 40px rgba(0,230,118,0.5);transition:transform 0.3s;
+  pointer-events:none;white-space:nowrap}
+.enter-now.sell{background:linear-gradient(135deg,var(--sell),#cc0033);color:#fff;
+  box-shadow:0 0 40px rgba(255,63,90,0.5)}
+.enter-now.show{transform:translateX(-50%) translateY(0)}
+
+/* ── GRID ── */
+.grid-header{position:relative;z-index:1;padding:16px 24px 8px;
+  display:flex;align-items:center;justify-content:space-between}
+.grid-title{font-size:11px;font-family:var(--font-mono);color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
+.grid-updated{font-size:11px;font-family:var(--font-mono);color:var(--muted)}
+.pairs-grid{position:relative;z-index:1;padding:0 24px 24px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:1100px){.pairs-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.pairs-grid{grid-template-columns:1fr}}
+
+/* ── PAIR CARD ── */
+.pair-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  padding:18px;position:relative;overflow:hidden;transition:all 0.3s;
+  border-top:2px solid var(--border)}
+.pair-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,140,0,0.15),transparent)}
+.pair-card.signal-buy{border-top-color:var(--buy);background:linear-gradient(135deg,rgba(0,230,118,0.04) 0%,var(--panel) 60%)}
+.pair-card.signal-buy::before{background:linear-gradient(90deg,transparent,rgba(0,230,118,0.3),transparent)}
+.pair-card.signal-sell{border-top-color:var(--sell);background:linear-gradient(135deg,rgba(255,63,90,0.04) 0%,var(--panel) 60%)}
+.pair-card.signal-sell::before{background:linear-gradient(90deg,transparent,rgba(255,63,90,0.3),transparent)}
+.pair-card.signal-wait{border-top-color:rgba(74,90,128,0.4)}
+.card-row1{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.pair-left{display:flex;flex-direction:column;gap:4px}
+.pair-name-row{display:flex;align-items:center;gap:8px}
+.pair-name{font-size:20px;font-weight:800;letter-spacing:-0.5px}
+.otc-tag{font-size:9px;font-family:var(--font-mono);padding:2px 7px;border-radius:4px;
+  background:rgba(255,140,0,0.1);color:var(--accent);border:1px solid rgba(255,140,0,0.3);letter-spacing:1px}
+.crypto-tag{font-size:9px;font-family:var(--font-mono);padding:2px 7px;border-radius:4px;
+  background:rgba(168,85,247,0.1);color:var(--purple);border:1px solid rgba(168,85,247,0.3);letter-spacing:1px}
+.mini-chart{display:flex;align-items:flex-end;gap:1px;height:20px;margin-top:2px}
+.mini-bar{width:3px;background:var(--muted2);border-radius:1px;transition:height 0.3s,background 0.3s}
+.signal-badge{padding:8px 16px;border-radius:10px;font-family:var(--font-head);
+  font-size:13px;font-weight:800;letter-spacing:1px;border:none;cursor:default}
+.signal-badge.buy{background:linear-gradient(135deg,var(--buy),#00b359);color:#000;
+  box-shadow:0 4px 20px rgba(0,230,118,0.35)}
+.signal-badge.sell{background:linear-gradient(135deg,var(--sell),#cc0033);color:#fff;
+  box-shadow:0 4px 20px rgba(255,63,90,0.35)}
+.signal-badge.wait{background:rgba(74,90,128,0.15);color:var(--muted);border:1px solid rgba(74,90,128,0.25)}
+
+/* CONFIDENCE BAR */
+.conf-row{margin-bottom:12px}
+.conf-label{display:flex;justify-content:space-between;margin-bottom:5px}
+.conf-text{font-size:10px;font-family:var(--font-mono);color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.conf-pct{font-size:12px;font-family:var(--font-mono);font-weight:700}
+.conf-pct.high{color:var(--buy)}
+.conf-pct.med{color:var(--gold)}
+.conf-pct.low{color:var(--muted)}
+.conf-track{height:5px;background:var(--muted2);border-radius:3px;overflow:hidden}
+.conf-fill{height:100%;border-radius:3px;transition:width 0.5s ease}
+.conf-fill.buy{background:linear-gradient(90deg,#00b359,var(--buy))}
+.conf-fill.sell{background:linear-gradient(90deg,#cc0033,var(--sell))}
+.conf-fill.wait{background:var(--muted2)}
+
+/* INDICATORS */
+.indicators{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.ind-chip{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  padding:7px 6px;text-align:center}
+.ind-label{font-size:9px;font-family:var(--font-mono);color:var(--muted);
+  text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px}
+.ind-val{font-size:12px;font-family:var(--font-mono);font-weight:700}
+.ind-val.bullish,.ind-val.up{color:var(--buy)}
+.ind-val.bearish,.ind-val.dn{color:var(--sell)}
+.ind-val.neutral{color:var(--muted)}
+
+/* TAGS */
+.tags{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
+.tag{font-size:10px;font-family:var(--font-mono);padding:3px 8px;border-radius:5px;
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--muted)}
+
+/* CANDLE COUNT */
+.data-quality{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;
+  border-top:1px solid var(--border)}
+.dq-bar{flex:1;height:3px;background:var(--muted2);border-radius:2px;overflow:hidden}
+.dq-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:2px}
+.dq-label{font-size:9px;font-family:var(--font-mono);color:var(--muted)}
+
+/* SKELETON */
+.pair-card.skeleton{animation:shimmer 1.5s infinite}
+@keyframes shimmer{0%,100%{opacity:0.5}50%{opacity:1}}
+.skel-line{height:14px;background:var(--muted2);border-radius:4px;margin-bottom:8px}
+
+/* STATS BAR */
+.stats-bar{position:relative;z-index:1;
+  margin:0 24px 16px;padding:12px 16px;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.stat-item{display:flex;flex-direction:column;gap:2px}
+.stat-label{font-size:9px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.stat-val{font-size:16px;font-weight:800}
+.stat-val.buy{color:var(--buy)}
+.stat-val.sell{color:var(--sell)}
+.stat-val.neutral{color:var(--text)}
+.stat-divider{width:1px;height:30px;background:var(--border)}
+.accuracy-note{margin-left:auto;font-size:10px;font-family:var(--font-mono);
+  color:var(--muted);padding:4px 10px;border-radius:6px;
+  background:rgba(255,140,0,0.06);border:1px solid rgba(255,140,0,0.15)}
+
+/* BUILDING DATA OVERLAY */
+.building-overlay{position:absolute;inset:0;border-radius:14px;
+  background:rgba(3,6,15,0.85);backdrop-filter:blur(4px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:5}
+.building-text{font-size:11px;font-family:var(--font-mono);color:var(--muted)}
+.building-progress{width:80px;height:3px;background:var(--muted2);border-radius:2px;overflow:hidden}
+.building-fill{height:100%;background:var(--accent);border-radius:2px;animation:build 2s ease infinite}
+@keyframes build{0%{width:0%}100%{width:100%}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🎯</div>
+    <div>
+      <div class="logo-text">RK DXB Trader</div>
+      <div class="logo-sub">OTC SIGNALS</div>
+    </div>
+  </div>
+  <div class="otc-badge">⚡ POCKET OPTION OTC</div>
+  <div class="spacer"></div>
+  <div class="header-right">
+    <span class="utc-clock" id="utcClock">--:--:--</span>
+    <div class="conn-badge connecting" id="connBadge">
+      <div class="conn-dot"></div>
+      <span id="connText">Connecting</span>
+    </div>
+    <a href="dashboard.html" class="back-btn">← Real Market</a>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <div class="po-badge"><div class="po-dot"></div>po-static.com LIVE</div>
+  <div class="candle-bar-wrap">
+    <div class="candle-label">
+      <span>NEXT CANDLE IN</span>
+      <span id="timerSecs" class="timer-secs">--s</span>
+    </div>
+    <div class="candle-bar-track">
+      <div class="candle-bar-fill" id="timerFill" style="width:50%"></div>
+    </div>
+  </div>
+  <div class="data-source">Data: <span>po-static.com</span> · 12 OTC pairs · 1s tick</div>
+</div>
+
+<!-- STATS BAR -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-item"><div class="stat-label">BUY Signals</div><div class="stat-val buy" id="statBuy">—</div></div>
+  <div class="stat-divider"></div>
+  <div class="stat-item"><div class="stat-label">SELL Signals</div><div class="stat-val sell" id="statSell">—</div></div>
+  <div class="stat-divider"></div>
+  <div class="stat-item"><div class="stat-label">WAIT</div><div class="stat-val neutral" id="statWait">—</div></div>
+  <div class="stat-divider"></div>
+  <div class="stat-item"><div class="stat-label">Strongest Signal</div><div class="stat-val" id="statBest">Building...</div></div>
+  <div class="accuracy-note">⚡ OTC Real Data · PO Platform</div>
+</div>
+
+<!-- GRID HEADER -->
+<div class="grid-header">
+  <span class="grid-title">// OTC SIGNALS — 12 PAIRS · POCKET OPTION</span>
+  <span class="grid-updated" id="lastUpdated">Connecting...</span>
+</div>
+
+<!-- PAIRS GRID -->
+<div class="pairs-grid" id="pairsGrid">
+  <!-- Cards injected by JS -->
+</div>
+
+<!-- ENTER NOW FLASH -->
+<div class="enter-now" id="enterNow"></div>
+
+<script>
+// ── Auth ──────────────────────────────────────────────────
+const AUTH_EMAIL = localStorage.getItem('rk_auth_email');
+const AUTH_TOKEN = localStorage.getItem('rk_auth_token');
+if (!AUTH_EMAIL || !AUTH_TOKEN) { window.location.href = 'index.html'; }
+
+async function logout() {
+  try { await fetch('https://rk-dxb-trader.onrender.com/api/auth/logout', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: AUTH_EMAIL }) }); } catch(e) {}
+  localStorage.removeItem('rk_auth_email'); localStorage.removeItem('rk_auth_token');
+  window.location.href = 'index.html';
+}
+
+// ── Clock ─────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const h = now.getUTCHours().toString().padStart(2,'0');
+  const m = now.getUTCMinutes().toString().padStart(2,'0');
+  const s = now.getUTCSeconds().toString().padStart(2,'0');
+  document.getElementById('utcClock').textContent = `UTC ${h}:${m}:${s}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Timer bar ─────────────────────────────────────────────
+function updateTimer() {
+  const now = new Date();
+  const secs = 60 - now.getUTCSeconds();
+  const pct = (secs / 60) * 100;
+  const fill = document.getElementById('timerFill');
+  const secsEl = document.getElementById('timerSecs');
+  if (!fill || !secsEl) return;
+  fill.style.width = pct + '%';
+  secsEl.textContent = secs + 's';
+  const urgent = secs <= 10;
+  fill.className = 'candle-bar-fill' + (urgent ? ' urgent' : '');
+  secsEl.className = 'timer-secs' + (urgent ? ' urgent' : '');
+  // Show ENTER NOW at ≤10s if strong signal
+  if (secs <= 10 && lastOTCState) {
+    const top = lastOTCState.pairs
+      .filter(p => p.signal !== 'WAIT' && p.confidence >= 78)
+      .sort((a,b) => b.confidence - a.confidence)[0];
+    if (top) showEnterNow(top);
+  } else if (secs > 10) {
+    hideEnterNow();
+  }
+}
+setInterval(updateTimer, 1000);
+
+// ── Enter Now ─────────────────────────────────────────────
+let enterNowActive = false;
+let enterTimer = null;
+
+function showEnterNow(pair) {
+  if (enterNowActive) return;
+  enterNowActive = true;
+  const el = document.getElementById('enterNow');
+  const isBuy = pair.signal === 'BUY';
+  el.textContent = `⚡ ${pair.displayName} — ${pair.signal} NOW`;
+  el.className = 'enter-now ' + (isBuy ? '' : 'sell') + ' show';
+  clearTimeout(enterTimer);
+  enterTimer = setTimeout(() => hideEnterNow(), 12000);
+}
+
+function hideEnterNow() {
+  enterNowActive = false;
+  const el = document.getElementById('enterNow');
+  el.classList.remove('show');
+}
+
+// ── Connection badge ─────────────────────────────────────
+function setConn(state, label) {
+  const badge = document.getElementById('connBadge');
+  const text = document.getElementById('connText');
+  badge.className = 'conn-badge ' + state;
+  text.textContent = label;
+}
+
+// ── Render helpers ────────────────────────────────────────
+function indClass(val, type) {
+  if (val === null || val === undefined) return 'neutral';
+  if (type === 'macd' || type === 'ema') {
+    if (typeof val === 'string') {
+      if (val === 'UP' || val.toLowerCase().includes('bull')) return 'bullish';
+      if (val === 'DN' || val.toLowerCase().includes('bear')) return 'bearish';
+    }
+    return 'neutral';
+  }
+  if (type === 'rsi') return val >= 70 ? 'sell' : val <= 30 ? 'buy' : 'neutral';
+  if (type === 'stoch') return val >= 80 ? 'sell' : val <= 20 ? 'buy' : 'neutral';
+  if (type === 'wr') return val >= -20 ? 'sell' : val <= -80 ? 'buy' : 'neutral';
+  if (type === 'cci') return val >= 100 ? 'sell' : val <= -100 ? 'buy' : 'neutral';
+  return 'neutral';
+}
+
+function indVal(v) {
+  if (v === null || v === undefined) return '—';
+  return String(v);
+}
+
+function confClass(conf, sig) {
+  if (sig === 'WAIT') return 'wait';
+  if (conf >= 80) return sig === 'BUY' ? 'buy' : 'sell';
+  return sig === 'BUY' ? 'buy' : 'sell';
+}
+
+function pctClass(conf) {
+  if (conf >= 80) return 'high';
+  if (conf >= 65) return 'med';
+  return 'low';
+}
+
+// Mini sparkline from tick history (passed as array of 0-1 ratios)
+function miniChart(ticks) {
+  if (!ticks || ticks.length === 0) {
+    return Array(10).fill('<div class="mini-bar" style="height:4px"></div>').join('');
+  }
+  const vals = ticks.slice(-10);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const range = max - min || 0.01;
+  return vals.map((v, i) => {
+    const h = Math.max(2, Math.round(((v - min) / range) * 18));
+    const isLast = i === vals.length - 1;
+    const col = isLast ? 'var(--accent)' : 'var(--muted2)';
+    return `<div class="mini-bar" style="height:${h}px;background:${col}"></div>`;
+  }).join('');
+}
+
+// ── Render one card ───────────────────────────────────────
+function renderCard(p) {
+  const sigClass = p.signal === 'BUY' ? 'buy' : p.signal === 'SELL' ? 'sell' : 'wait';
+  const cardClass = `pair-card signal-${p.signal.toLowerCase()}`;
+  const isCrypto = p.isCrypto;
+  const hasData = p.candleCount >= 3;
+  const dataQuality = Math.min(100, Math.round((p.candleCount / 30) * 100));
+  const trendArrow = p.trend === 'UP' ? '↑' : p.trend === 'DOWN' ? '↓' : '→';
+  const trendCol = p.trend === 'UP' ? 'var(--buy)' : p.trend === 'DOWN' ? 'var(--sell)' : 'var(--muted)';
+
+  // Shorten display name
+  const shortName = p.displayName.replace(' OTC', '');
+  const isHighConf = p.confidence >= 80 && p.signal !== 'WAIT';
+
+  return `
+  <div class="${cardClass}" id="card-${p.symbol}">
+    ${!hasData ? `<div class="building-overlay"><div class="building-text">Building data...</div><div class="building-progress"><div class="building-fill"></div></div></div>` : ''}
+    <div class="card-row1">
+      <div class="pair-left">
+        <div class="pair-name-row">
+          <div class="pair-name">${shortName}</div>
+          ${isCrypto ? '<span class="crypto-tag">⚡ CRYPTO</span>' : '<span class="otc-tag">OTC</span>'}
+        </div>
+        <div class="mini-chart">${miniChart(p.recentPrices)}</div>
+      </div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="signal-badge ${sigClass}">${p.signal === 'BUY' ? '▲ BUY' : p.signal === 'SELL' ? '▼ SELL' : '⏸ WAIT'}</div>
+        <div style="font-size:11px;font-family:var(--font-mono);color:${trendCol}">${trendArrow} ${p.trend}</div>
+      </div>
+    </div>
+
+    <div class="conf-row">
+      <div class="conf-label">
+        <span class="conf-text">CONFIDENCE</span>
+        <span class="conf-pct ${pctClass(p.confidence)}">${p.confidence}%</span>
+      </div>
+      <div class="conf-track">
+        <div class="conf-fill ${confClass(p.confidence, p.signal)}" style="width:${p.confidence}%"></div>
+      </div>
+    </div>
+
+    <div class="indicators">
+      <div class="ind-chip">
+        <div class="ind-label">RSI</div>
+        <div class="ind-val ${indClass(p.rsi,'rsi')}">${indVal(p.rsi)}</div>
+      </div>
+      <div class="ind-chip">
+        <div class="ind-label">STOCH</div>
+        <div class="ind-val ${indClass(p.stoch,'stoch')}">${indVal(p.stoch)}</div>
+      </div>
+      <div class="ind-chip">
+        <div class="ind-label">MACD</div>
+        <div class="ind-val ${indClass(p.macd,'macd')}">${indVal(p.macd)}</div>
+      </div>
+      <div class="ind-chip">
+        <div class="ind-label">EMA</div>
+        <div class="ind-val ${indClass(p.emaTrend,'ema')}">${indVal(p.emaTrend)}</div>
+      </div>
+    </div>
+
+    <div class="tags">
+      ${(p.reasons||[]).slice(0,4).map(r => `<span class="tag">${r}</span>`).join('')}
+      ${p.pattern && p.pattern !== 'none' ? `<span class="tag" style="color:var(--gold);border-color:rgba(255,208,96,0.3)">${p.pattern}</span>` : ''}
+    </div>
+
+    <div class="data-quality">
+      <div class="dq-label">${p.candleCount} candles</div>
+      <div class="dq-bar"><div class="dq-fill" style="width:${dataQuality}%"></div></div>
+      <div class="dq-label">${dataQuality < 100 ? 'Building...' : 'Ready ✓'}</div>
+    </div>
+  </div>`;
+}
+
+// ── Render stats bar ──────────────────────────────────────
+function updateStats(pairs) {
+  const buys = pairs.filter(p => p.signal === 'BUY').length;
+  const sells = pairs.filter(p => p.signal === 'SELL').length;
+  const waits = pairs.filter(p => p.signal === 'WAIT').length;
+  document.getElementById('statBuy').textContent = buys;
+  document.getElementById('statSell').textContent = sells;
+  document.getElementById('statWait').textContent = waits;
+  const best = pairs.filter(p => p.signal !== 'WAIT').sort((a,b) => b.confidence - a.confidence)[0];
+  const bestEl = document.getElementById('statBest');
+  if (best) {
+    bestEl.textContent = `${best.displayName.replace(' OTC','')} ${best.signal} ${best.confidence}%`;
+    bestEl.style.color = best.signal === 'BUY' ? 'var(--buy)' : 'var(--sell)';
+  } else {
+    bestEl.textContent = 'Building...';
+    bestEl.style.color = 'var(--text)';
+  }
+}
+
+// ── Render state ──────────────────────────────────────────
+let lastOTCState = null;
+let initialized = false;
+
+function renderOTCState(state) {
+  lastOTCState = state;
+  const grid = document.getElementById('pairsGrid');
+  const pairs = state.pairs;
+
+  if (!initialized) {
+    // First render - create all cards
+    grid.innerHTML = pairs.map(p => renderCard(p)).join('');
+    initialized = true;
+  } else {
+    // Update existing cards
+    pairs.forEach(p => {
+      const el = document.getElementById('card-' + p.symbol);
+      if (el) el.outerHTML = renderCard(p);
+    });
+  }
+
+  updateStats(pairs);
+
+  const now = new Date(state.serverTime);
+  document.getElementById('lastUpdated').textContent =
+    `Updated ${now.getUTCHours().toString().padStart(2,'0')}:${now.getUTCMinutes().toString().padStart(2,'0')} UTC`;
+}
+
+// ── WebSocket ─────────────────────────────────────────────
+const WS_URL = window.location.hostname === 'localhost'
+  ? 'ws://localhost:3001'
+  : 'wss://rk-dxb-trader.onrender.com';
+
+let ws, reconnectTimer;
+
+function connect() {
+  setConn('connecting', 'Connecting');
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    clearTimeout(reconnectTimer);
+    ws.send(JSON.stringify({ type: 'auth', email: AUTH_EMAIL, token: AUTH_TOKEN }));
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'auth_ok') {
+        setConn('connected', 'Live');
+        return;
+      }
+      if (msg.type === 'auth_failed' || msg.type === 'kicked') {
+        alert(msg.type === 'kicked' ? '⚠️ Logged in from another device.' : '⚠️ Session expired.');
+        localStorage.removeItem('rk_auth_email'); localStorage.removeItem('rk_auth_token');
+        window.location.href = 'index.html'; return;
+      }
+      if (msg.type === 'otc') {
+        renderOTCState(msg);
+      }
+      // Also handle regular state updates for the timer
+      if (msg.type === 'state') {
+        // Just update timer from server time
+      }
+    } catch(e) {}
+  };
+
+  ws.onclose = () => {
+    setConn('disconnected', 'Reconnecting');
+    reconnectTimer = setTimeout(connect, 4000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+// Show skeletons while connecting
+function showSkeletons() {
+  const grid = document.getElementById('pairsGrid');
+  const skels = ['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','EUR/GBP',
+                  'GBP/JPY','EUR/JPY','USD/CHF','NZD/USD','BTC/USD','ETH/USD'];
+  grid.innerHTML = skels.map(name => `
+    <div class="pair-card skeleton">
+      <div style="font-size:18px;font-weight:800;margin-bottom:12px">${name} OTC</div>
+      <div class="skel-line" style="width:60%"></div>
+      <div class="skel-line" style="width:100%;height:4px;margin:16px 0"></div>
+      <div class="skel-line" style="width:80%"></div>
+      <div class="skel-line" style="width:50%"></div>
+    </div>`).join('');
+}
+
+// Also fetch OTC state via REST as fallback
+async function fetchOTCRest() {
+  try {
+    const res = await fetch('https://rk-dxb-trader.onrender.com/api/otc');
+    const data = await res.json();
+    if (data.pairs) renderOTCState(data);
+  } catch(e) {}
+}
+
+showSkeletons();
+connect();
+// Fallback REST poll every 3s
+setInterval(fetchOTCRest, 3000);
+// Fetch immediately
+setTimeout(fetchOTCRest, 1000);
+</script>
+</body>
+</html>
