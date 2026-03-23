@@ -99,7 +99,7 @@ async function updateAllPairs() {
   // Forex pairs — stagger 1.5s each (Twelve Data rate limit)
   for (let i = 0; i < PAIRS.length; i++) {
     await updatePair({ ...PAIRS[i], type: 'forex' });
-    if (i < PAIRS.length - 1) await new Promise(r => setTimeout(r, 1500));
+    if (i < PAIRS.length - 1) await new Promise(r => setTimeout(r, 800));
   }
   // Crypto pairs — Binance, no rate limit
   for (const cp of CRYPTO_PAIRS) {
@@ -300,7 +300,7 @@ function broadcast() {
 }
 
 // ── Cron ─────────────────────────────────────────────────────
-cron.schedule('* * * * *', async () => { await updateAllPairs(); broadcast(); });
+cron.schedule('*/5 * * * *', async () => { await updateAllPairs(); broadcast(); }); // Every 5min = 96 calls/day per key (within 800 free limit)
 cron.schedule('* * * * * *', () => { broadcast(); });
 
 // Update OTC every second - po-static.com is live per second
