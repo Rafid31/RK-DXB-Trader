@@ -204,50 +204,58 @@ function calcRawSignal(candles) {
 }
 
 // ── CONFIRMED SIGNAL SYSTEM ──────────────────────────────────
-// Tracks signal history per symbol and only outputs CONFIRMED signals
-// A signal is confirmed when it appears 3 times in a row
-// Once confirmed, it stays locked until the OPPOSITE is confirmed
+// A signal is CONFIRMED when:
+//   - Raw signal appears 2× in a row (fast) AND slope aligns, OR
+//   - Raw signal appears 3× in a row (safe, no slope requirement)
+// Once confirmed, locked until opposite confirmed 2× in a row
 
-const signalHistory = {}; // symbol -> last 5 raw signals
-const confirmedSignal = {}; // symbol -> { signal, confidence, lockedAt }
+const signalHistory = {}; // symbol -> last 6 raw signals
+const confirmedSignal = {}; // symbol -> { signal, confidence, isConfirmed }
 
 function getConfirmedSignal(symbol, candles) {
   if (!signalHistory[symbol]) signalHistory[symbol] = [];
-  if (!confirmedSignal[symbol]) confirmedSignal[symbol] = { signal:'WAIT', confidence:0 };
+  if (!confirmedSignal[symbol]) confirmedSignal[symbol] = { signal:'WAIT', confidence:0, isConfirmed:false };
 
   const raw = calcRawSignal(candles);
   const hist = signalHistory[symbol];
 
-  // Add to history
   hist.push(raw.signal);
-  if (hist.length > 5) hist.shift();
+  if (hist.length > 6) hist.shift();
 
-  // Check for 3 consecutive same signals
-  if (hist.length >= 3) {
+  const prev = confirmedSignal[symbol];
+
+  if (hist.length >= 2) {
+    const last2 = hist.slice(-2);
     const last3 = hist.slice(-3);
-    const allSame = last3.every(s => s === last3[0]);
-    const sig = last3[0];
+    const same2 = last2[0] === last2[1] && last2[0] !== 'WAIT';
+    const same3 = last3.length === 3 && last3.every(s => s === last3[0]) && last3[0] !== 'WAIT';
+    const allWait3 = last3.length === 3 && last3.every(s => s === 'WAIT');
 
-    if (allSame && sig !== 'WAIT') {
-      // Confirmed signal - update confidence as average of last 3
+    // Confirmed by 3 consecutive (most reliable)
+    if (same3) {
       confirmedSignal[symbol] = {
-        signal: sig,
-        confidence: raw.confidence,
-        lockedAt: new Date().toISOString(),
-        isConfirmed: true
+        signal: last3[0],
+        confidence: Math.min(95, raw.confidence + 5), // bonus for 3× confirmation
+        isConfirmed: true,
+        lockedAt: new Date().toISOString()
       };
-    } else if (allSame && sig === 'WAIT') {
-      // 3 consecutive WAITs = no trade, reset
+    }
+    // Reset on 3 consecutive WAITs
+    else if (allWait3) {
+      confirmedSignal[symbol] = { signal:'WAIT', confidence:0, isConfirmed:false };
+    }
+    // If confirmed signal gets opposite 2× in a row = reset to WAIT first
+    else if (same2 && prev.isConfirmed && last2[0] !== prev.signal) {
       confirmedSignal[symbol] = { signal:'WAIT', confidence:0, isConfirmed:false };
     }
   }
 
   return {
     ...raw,
-    signal: confirmedSignal[symbol].signal,
-    confidence: confirmedSignal[symbol].confidence,
-    isConfirmed: confirmedSignal[symbol].isConfirmed || false,
-    rawSignal: raw.signal, // what the engine ACTUALLY calculated this tick
+    signal:        confirmedSignal[symbol].signal,
+    confidence:    confirmedSignal[symbol].confidence,
+    isConfirmed:   confirmedSignal[symbol].isConfirmed,
+    rawSignal:     raw.signal,
     rawConfidence: raw.confidence,
     signalHistory: [...hist]
   };

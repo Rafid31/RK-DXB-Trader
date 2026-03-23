@@ -279,14 +279,10 @@ function broadcast() {
 cron.schedule('* * * * *', async () => { await updateAllPairs(); broadcast(); });
 cron.schedule('* * * * * *', () => { broadcast(); });
 
-// Update OTC every 2 seconds (po-static.com updates each second, 2s gives buffer)
-let otcTick = 0;
+// Update OTC every second - po-static.com is live per second
 cron.schedule('* * * * * *', async () => {
-  otcTick++;
-  if (otcTick % 2 === 0) {
-    await updateAllOTC();
-    broadcastOTC();
-  }
+  await updateAllOTC();
+  broadcastOTC();
 });
 cron.schedule('* * * * *', async () => {
   const alerts = getSessionAlerts();

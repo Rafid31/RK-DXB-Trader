@@ -31,10 +31,12 @@ const candleStore = {};    // symbol -> last 100 OHLC candles
 const lastSignals = {};    // symbol -> signal result
 const currentCandle = {};  // symbol -> building candle
 
+const lastSlopes = {};
 OTC_PAIRS.forEach(sym => {
   tickHistory[sym] = [];
   candleStore[sym] = [];
   lastSignals[sym] = { signal: 'WAIT', confidence: 0 };
+  lastSlopes[sym] = { slope: 0, slopeDir: 'FLAT', slopeStrong: false };
   currentCandle[sym] = null;
 });
 
@@ -42,20 +44,40 @@ OTC_PAIRS.forEach(sym => {
 function parseSVG(svgText) {
   const match = svgText.match(/points="([^"]+)"/);
   if (!match) return [];
-  const pts = match[1].trim().split(' ').map(p => {
+  const rawPts = match[1].trim().split(' ').map(p => {
     const parts = p.split(',');
     return { x: parseFloat(parts[0]), y: parseFloat(parts[1]) };
   }).filter(p => !isNaN(p.x) && !isNaN(p.y) && p.y !== 55);
   
-  if (pts.length === 0) return [];
+  if (rawPts.length === 0) return [];
   
-  // Use fixed 55px scale (SVG height) for consistent normalization
-  // Lower Y = higher price. Scale: 0 = highest possible, 55 = lowest possible
-  // We scale to 100 for better indicator sensitivity
-  return pts.map(p => ({
+  // Normalize Y to 0-100 using the frame's own min/max
+  // This handles the SVG rescaling correctly
+  const ys = rawPts.map(p => p.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const range = maxY - minY || 1;
+  
+  const pts = rawPts.map(p => ({
     x: p.x,
-    price: parseFloat(((55 - p.y) / 55 * 100).toFixed(4)) // Scale to 0-100 range
+    price: parseFloat(((maxY - p.y) / range * 100).toFixed(4))
   }));
+  
+  return pts;
+}
+
+// Linear regression slope on last N price points
+function calcSlope(pts, n = 10) {
+  const last = pts.slice(-Math.min(n, pts.length));
+  if (last.length < 3) return 0;
+  const len = last.length;
+  const sumX = last.reduce((s,p) => s+p.x, 0);
+  const sumY = last.reduce((s,p) => s+p.price, 0);
+  const sumXY = last.reduce((s,p) => s+p.x*p.price, 0);
+  const sumX2 = last.reduce((s,p) => s+p.x*p.x, 0);
+  const denom = len*sumX2 - sumX*sumX;
+  if (denom === 0) return 0;
+  return (len*sumXY - sumX*sumY) / denom;
 }
 
 // Fetch one OTC pair — returns full SVG point array
@@ -168,13 +190,19 @@ async function updateOTCPair(symbol) {
   const currentPrice = pts[pts.length - 1].price;
   lastPrices[symbol] = currentPrice;
   
+  // Calculate slope from this SVG's points (most reliable indicator)
+  const slope = calcSlope(pts, 10);
+  const slopeStrong = Math.abs(slope) > 0.5;  // Strong directional move
+  const slopeDir = slope > 0.5 ? 'UP' : slope < -0.5 ? 'DOWN' : 'FLAT';
+  lastSlopes[symbol] = { slope: parseFloat(slope.toFixed(3)), slopeDir, slopeStrong };
+  
   // Update candle using full SVG point array
   updateCandle(symbol, pts, Date.now());
   
   // Recalculate signal every 2 ticks
   if (updateCount % 2 === 0) {
     const result = calcOTCSignal(symbol);
-    lastSignals[symbol] = { ...result, updatedAt: new Date().toISOString() };
+    lastSignals[symbol] = { ...result, slope: slope.toFixed(3), slopeDir, slopeStrong, updatedAt: new Date().toISOString() };
   }
 }
 
@@ -216,6 +244,9 @@ function getOTCState() {
       pattern: signal.pattern,
       reasons: signal.reasons || [],
       updatedAt: signal.updatedAt || null,
+      slope: lastSlopes[symbol]?.slope || 0,
+      slopeDir: lastSlopes[symbol]?.slopeDir || 'FLAT',
+      slopeStrong: lastSlopes[symbol]?.slopeStrong || false,
       isOTC: true,
       isCrypto: symbol.includes('BTC') || symbol.includes('ETH')
     };

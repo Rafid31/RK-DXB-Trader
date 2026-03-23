@@ -60,91 +60,104 @@ body::before{content:'';position:fixed;inset:0;
 .tbar{flex:1;height:4px;background:var(--muted2);border-radius:2px;overflow:hidden}
 .tfill{height:100%;border-radius:2px;transition:width 0.9s linear;background:var(--accent)}
 .tfill.warn{background:var(--sell)}
-.tsecs{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);min-width:28px}
+.tsecs{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);min-width:32px}
 .tsecs.warn{color:var(--sell);animation:blink 0.5s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
 
-/* FINAL SIGNAL BANNER — shown last 10s */
-.final-banner{
+/* ═══ FINAL SIGNAL BANNER ═══ */
+.final-wrap{
   position:fixed;bottom:0;left:0;right:0;z-index:999;
-  padding:0;height:0;overflow:hidden;
-  transition:height 0.3s ease;background:transparent}
-.final-banner.show{height:90px}
+  transform:translateY(100%);transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1)}
+.final-wrap.show{transform:translateY(0)}
 .final-inner{
-  height:90px;display:flex;align-items:center;justify-content:center;gap:20px;
-  padding:0 24px;font-family:var(--font)}
-.final-banner.buy .final-inner{background:linear-gradient(90deg,rgba(0,230,118,0.95),rgba(0,180,90,0.95))}
-.final-banner.sell .final-inner{background:linear-gradient(90deg,rgba(255,63,90,0.95),rgba(200,0,50,0.95))}
-.final-banner.wait .final-inner{background:linear-gradient(90deg,rgba(30,42,64,0.97),rgba(20,30,50,0.97));border-top:1px solid var(--border)}
-.final-icon{font-size:36px}
-.final-text{display:flex;flex-direction:column;gap:2px}
-.final-dir{font-size:28px;font-weight:800;color:#000;letter-spacing:1px}
-.final-banner.sell .final-dir,.final-banner.wait .final-dir{color:#fff}
-.final-sub{font-size:12px;font-family:var(--mono);color:rgba(0,0,0,0.6);letter-spacing:1px}
-.final-banner.sell .final-sub,.final-banner.wait .final-sub{color:rgba(255,255,255,0.6)}
-.final-pairs{display:flex;flex-wrap:wrap;gap:8px;flex:1;justify-content:flex-end}
-.fp-chip{padding:6px 12px;border-radius:8px;font-size:12px;font-weight:800;
+  padding:14px 24px;display:flex;align-items:center;gap:16px;
+  border-top:2px solid rgba(255,255,255,0.2)}
+.final-wrap.buy .final-inner{background:linear-gradient(90deg,#00c853,#00e676)}
+.final-wrap.sell .final-inner{background:linear-gradient(90deg,#c62828,#ff3f5a)}
+.final-wrap.wait .final-inner{background:rgba(20,30,50,0.97);border-top-color:var(--border)}
+.final-icon{font-size:32px;line-height:1}
+.final-main{flex:1}
+.final-dir{font-size:24px;font-weight:800;letter-spacing:1px;line-height:1}
+.final-wrap.buy .final-dir{color:#000}
+.final-wrap.sell .final-dir{color:#fff}
+.final-wrap.wait .final-dir{color:var(--muted)}
+.final-detail{font-size:11px;font-family:var(--mono);margin-top:3px;opacity:0.75}
+.final-wrap.buy .final-detail{color:rgba(0,0,0,0.7)}
+.final-wrap.sell .final-detail,.final-wrap.wait .final-detail{color:rgba(255,255,255,0.6)}
+.final-pairs{display:flex;flex-wrap:wrap;gap:6px}
+.fp{padding:5px 10px;border-radius:7px;font-size:11px;font-weight:800;
   background:rgba(0,0,0,0.2);color:#fff;font-family:var(--font)}
-.final-dismiss{font-size:11px;font-family:var(--mono);color:rgba(255,255,255,0.5);cursor:pointer;
-  padding:6px 12px;border:1px solid rgba(255,255,255,0.2);border-radius:6px}
+.final-dismiss{font-size:10px;font-family:var(--mono);color:rgba(255,255,255,0.5);
+  cursor:pointer;padding:5px 10px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;
+  white-space:nowrap}
 
 /* STATS */
-.stats{position:relative;z-index:1;margin:14px 20px 0;padding:12px 16px;
+.stats{position:relative;z-index:1;margin:12px 20px 0;padding:10px 16px;
   background:var(--panel);border:1px solid var(--border);border-radius:12px;
-  display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.stat{display:flex;flex-direction:column;gap:2px}
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:1px}
 .slbl{font-size:9px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px}
 .sval{font-size:18px;font-weight:800}
 .sval.b{color:var(--buy)}.sval.s{color:var(--sell)}.sval.n{color:var(--text)}
-.sdiv{width:1px;height:28px;background:var(--border)}
-.conf-note{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--muted);
-  padding:4px 10px;border-radius:6px;background:rgba(255,140,0,0.05);border:1px solid var(--border)}
+.sdiv{width:1px;height:26px;background:var(--border)}
+.note{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--muted);
+  padding:3px 10px;border-radius:6px;background:rgba(255,140,0,0.05);border:1px solid var(--border)}
 
 /* GRID */
-.ghdr{position:relative;z-index:1;padding:14px 20px 8px;
+.ghdr{position:relative;z-index:1;padding:12px 20px 6px;
   display:flex;align-items:center;justify-content:space-between}
 .gtitle{font-size:10px;font-family:var(--mono);color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
 .gupdated{font-size:10px;font-family:var(--mono);color:var(--muted)}
-.grid{position:relative;z-index:1;padding:0 20px 100px;
+.grid{position:relative;z-index:1;padding:0 20px 110px;
   display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.grid{grid-template-columns:1fr}}
 
-/* PAIR CARD */
+/* CARD */
 .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
-  padding:16px;position:relative;overflow:hidden;transition:border-color 0.3s;
-  border-top:2px solid rgba(255,140,0,0.15)}
-.card.buy{border-top-color:var(--buy);background:linear-gradient(160deg,rgba(0,230,118,0.05) 0%,var(--panel) 50%)}
-.card.sell{border-top-color:var(--sell);background:linear-gradient(160deg,rgba(255,63,90,0.05) 0%,var(--panel) 50%)}
-.card.confirmed-buy{border-color:rgba(0,230,118,0.5);border-top-color:var(--buy);
-  box-shadow:0 0 20px rgba(0,230,118,0.12)}
-.card.confirmed-sell{border-color:rgba(255,63,90,0.5);border-top-color:var(--sell);
-  box-shadow:0 0 20px rgba(255,63,90,0.12)}
+  padding:16px;position:relative;overflow:hidden;
+  border-top:2px solid rgba(255,140,0,0.15);transition:border-color 0.3s,box-shadow 0.3s}
+.card.buy{border-top-color:var(--buy);background:linear-gradient(160deg,rgba(0,230,118,0.05),var(--panel) 50%)}
+.card.sell{border-top-color:var(--sell);background:linear-gradient(160deg,rgba(255,63,90,0.05),var(--panel) 50%)}
+.card.confirmed-buy{border-color:rgba(0,230,118,0.45);box-shadow:0 0 18px rgba(0,230,118,0.1)}
+.card.confirmed-sell{border-color:rgba(255,63,90,0.45);box-shadow:0 0 18px rgba(255,63,90,0.1)}
 
-/* TOP ROW */
 .crow{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
 .pname{font-size:18px;font-weight:800;letter-spacing:-0.3px}
-.ptags{display:flex;gap:5px;margin-top:3px;align-items:center}
+.ptags{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
 .otag{font-size:8px;font-family:var(--mono);padding:2px 6px;border-radius:3px;
   background:rgba(255,140,0,0.08);color:var(--accent);border:1px solid rgba(255,140,0,0.25);letter-spacing:1px}
 .ctag{font-size:8px;font-family:var(--mono);padding:2px 6px;border-radius:3px;
   background:rgba(168,85,247,0.08);color:var(--purple);border:1px solid rgba(168,85,247,0.25);letter-spacing:1px}
 .conf-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px}
-.conf-tag.confirmed{background:rgba(255,208,96,0.1);color:var(--gold);border:1px solid rgba(255,208,96,0.3)}
-.conf-tag.raw{background:rgba(74,90,128,0.1);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
+.conf-tag.ok{background:rgba(255,208,96,0.1);color:var(--gold);border:1px solid rgba(255,208,96,0.3)}
+.conf-tag.raw{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
+.slope-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px}
+.slope-tag.up{background:rgba(0,230,118,0.08);color:var(--buy);border:1px solid rgba(0,230,118,0.2)}
+.slope-tag.dn{background:rgba(255,63,90,0.08);color:var(--sell);border:1px solid rgba(255,63,90,0.2)}
+.slope-tag.flat{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
 
-/* SIGNAL BUTTON */
-.sigbtn{padding:8px 16px;border-radius:9px;font-family:var(--font);
-  font-size:13px;font-weight:800;letter-spacing:1px;border:none;cursor:default;
-  display:flex;align-items:center;gap:6px}
+.sigbtn{padding:8px 14px;border-radius:9px;font-family:var(--font);
+  font-size:13px;font-weight:800;letter-spacing:1px;border:none;cursor:default}
 .sigbtn.buy{background:linear-gradient(135deg,var(--buy),#00b359);color:#000;
-  box-shadow:0 4px 16px rgba(0,230,118,0.3)}
+  box-shadow:0 4px 14px rgba(0,230,118,0.3)}
 .sigbtn.sell{background:linear-gradient(135deg,var(--sell),#cc0033);color:#fff;
-  box-shadow:0 4px 16px rgba(255,63,90,0.3)}
+  box-shadow:0 4px 14px rgba(255,63,90,0.3)}
 .sigbtn.wait{background:rgba(58,74,106,0.2);color:var(--muted);
   border:1px solid rgba(58,74,106,0.3);font-size:11px}
 
-/* CONFIDENCE */
+/* SLOPE BAR — shows momentum direction visually */
+.slope-bar-wrap{margin-bottom:8px}
+.slope-bar-lbl{display:flex;justify-content:space-between;margin-bottom:3px}
+.slope-bar-name{font-size:9px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.slope-bar-val{font-size:9px;font-family:var(--mono)}
+.slope-track{height:5px;background:var(--muted2);border-radius:3px;overflow:hidden;position:relative}
+.slope-fill{height:100%;border-radius:3px;position:absolute;transition:all 0.5s ease}
+.slope-fill.up{background:linear-gradient(90deg,var(--muted2),var(--buy));right:0}
+.slope-fill.dn{background:linear-gradient(90deg,var(--sell),var(--muted2));left:0}
+.slope-fill.flat{background:var(--muted2);left:50%;width:2px}
+.slope-center{position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.15)}
+
 .confrow{margin-bottom:10px}
 .conflbl{display:flex;justify-content:space-between;margin-bottom:4px}
 .confname{font-size:9px;font-family:var(--mono);color:var(--muted);letter-spacing:1px;text-transform:uppercase}
@@ -156,40 +169,34 @@ body::before{content:'';position:fixed;inset:0;
 .conffill.sell{background:linear-gradient(90deg,#cc0033,var(--sell))}
 .conffill.wait{background:var(--muted2)}
 
-/* INDICATORS ROW */
-.inds{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px}
+.inds{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
 .ind{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:6px 5px;text-align:center}
 .indn{font-size:8px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}
 .indv{font-size:11px;font-family:var(--mono);font-weight:700}
 .indv.up,.indv.bullish{color:var(--buy)}.indv.dn,.indv.bearish{color:var(--sell)}.indv.neutral{color:var(--muted)}
 
-/* SIGNAL HISTORY DOTS */
-.hist-row{display:flex;align-items:center;gap:4px;margin-bottom:8px}
-.hist-lbl{font-size:9px;font-family:var(--mono);color:var(--muted);margin-right:4px}
+.hist-row{display:flex;align-items:center;gap:4px;margin-bottom:7px}
+.hist-lbl{font-size:9px;font-family:var(--mono);color:var(--muted);margin-right:2px}
 .hdot{width:10px;height:10px;border-radius:50%;border:1px solid}
 .hdot.buy{background:rgba(0,230,118,0.3);border-color:var(--buy)}
 .hdot.sell{background:rgba(255,63,90,0.3);border-color:var(--sell)}
-.hdot.wait{background:rgba(58,74,106,0.2);border-color:var(--muted)}
+.hdot.wait{background:rgba(58,74,106,0.15);border-color:var(--muted)}
 
-/* TAGS */
-.tags{display:flex;flex-wrap:wrap;gap:4px;min-height:18px}
-.tag{font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:4px;
+.tags{display:flex;flex-wrap:wrap;gap:4px;min-height:16px}
+.tag{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px;
   background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--muted)}
 
-/* DATA PROGRESS */
-.dqrow{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.dqrow{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
 .dqbar{flex:1;height:2px;background:var(--muted2);border-radius:1px;overflow:hidden}
 .dqfill{height:100%;background:var(--accent);border-radius:1px}
 .dqlbl{font-size:9px;font-family:var(--mono);color:var(--muted)}
 
-/* SKELETON */
 .card.skel{animation:shimmer 1.5s ease infinite}
 @keyframes shimmer{0%,100%{opacity:0.4}50%{opacity:0.8}}
 .skline{height:12px;background:var(--muted2);border-radius:3px;margin-bottom:8px}
 </style>
 </head>
 <body>
-
 <header class="hdr">
   <div class="logo">RK<span>DXB</span> Trader</div>
   <div class="otc-pill">⚡ OTC SIGNALS</div>
@@ -207,10 +214,9 @@ body::before{content:'';position:fixed;inset:0;
     <div class="tbar"><div class="tfill" id="tfill" style="width:50%"></div></div>
     <span class="tsecs" id="tsecs">--s</span>
   </div>
-  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto">12 OTC pairs · Confirmed signals</span>
+  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto">12 OTC pairs · Confirmed 3× · No flip-flop</span>
 </div>
 
-<!-- STATS BAR -->
 <div class="stats">
   <div class="stat"><div class="slbl">BUY</div><div class="sval b" id="sB">—</div></div>
   <div class="sdiv"></div>
@@ -218,139 +224,205 @@ body::before{content:'';position:fixed;inset:0;
   <div class="sdiv"></div>
   <div class="stat"><div class="slbl">WAIT</div><div class="sval n" id="sW">—</div></div>
   <div class="sdiv"></div>
-  <div class="stat"><div class="slbl">Best Signal</div><div class="sval n" id="sBest" style="font-size:14px">Building...</div></div>
-  <div class="conf-note">✅ Confirmed = 3× in a row · No flip-flop</div>
+  <div class="stat"><div class="slbl">Best Confirmed</div><div class="sval n" id="sBest" style="font-size:13px">Building...</div></div>
+  <div class="note">✅ Signal = 3× same in a row</div>
 </div>
 
-<!-- GRID -->
 <div class="ghdr">
   <span class="gtitle">// OTC SIGNALS — POCKET OPTION · 12 PAIRS</span>
   <span class="gupdated" id="upd">—</span>
 </div>
 <div class="grid" id="grid"></div>
 
-<!-- FINAL SIGNAL BANNER (last 10s) -->
-<div class="final-banner" id="finalBanner">
+<!-- FINAL SIGNAL BANNER -->
+<div class="final-wrap" id="finalWrap">
   <div class="final-inner">
-    <div class="final-icon" id="finalIcon">⚡</div>
-    <div class="final-text">
-      <div class="final-dir" id="finalDir">—</div>
-      <div class="final-sub" id="finalSub">ENTER NOW</div>
+    <div class="final-icon" id="fIcon">⚡</div>
+    <div class="final-main">
+      <div class="final-dir" id="fDir">—</div>
+      <div class="final-detail" id="fDetail">—</div>
     </div>
-    <div class="final-pairs" id="finalPairs"></div>
-    <span class="final-dismiss" onclick="dismissFinal()">✕ DISMISS</span>
+    <div class="final-pairs" id="fPairs"></div>
+    <span class="final-dismiss" onclick="dismissBanner()">✕</span>
   </div>
 </div>
 
 <script>
+'use strict';
 // ── Auth ────────────────────────────────────────────────────
 const EMAIL = localStorage.getItem('rk_auth_email');
 const TOKEN = localStorage.getItem('rk_auth_token');
-if (!EMAIL || !TOKEN) location.href='index.html';
+if (!EMAIL || !TOKEN) { location.href = 'index.html'; }
 
 async function logout() {
-  try { await fetch('https://rk-dxb-trader.onrender.com/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:EMAIL})}); } catch(e) {}
-  localStorage.removeItem('rk_auth_email');localStorage.removeItem('rk_auth_token');
-  location.href='index.html';
+  try {
+    await fetch('https://rk-dxb-trader.onrender.com/api/auth/logout', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email:EMAIL})
+    });
+  } catch(e) {}
+  localStorage.removeItem('rk_auth_email');
+  localStorage.removeItem('rk_auth_token');
+  location.href = 'index.html';
 }
 
-// ── Clock ────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────
+let otcData = null;   // latest OTC state from server
+let gridInit = false; // first render done?
+let bannerDismissed = false;
+let lastBannerSig = '';
+
+// ── UTC Clock ────────────────────────────────────────────────
+function pad(n){ return String(n).padStart(2,'0'); }
 setInterval(() => {
-  const n=new Date();
-  document.getElementById('clk').textContent=`UTC ${pad(n.getUTCHours())}:${pad(n.getUTCMinutes())}:${pad(n.getUTCSeconds())}`;
-},1000);
-function pad(n){return String(n).padStart(2,'0');}
+  const n = new Date();
+  document.getElementById('clk').textContent =
+    `UTC ${pad(n.getUTCHours())}:${pad(n.getUTCMinutes())}:${pad(n.getUTCSeconds())}`;
+}, 1000);
 
-// ── Timer ────────────────────────────────────────────────────
-function updateTimer() {
-  const n=new Date(), secs=60-n.getUTCSeconds(), pct=(secs/60)*100;
-  const fill=document.getElementById('tfill'), sel=document.getElementById('tsecs');
-  fill.style.width=pct+'%';
-  sel.textContent=secs+'s';
-  const warn=secs<=10;
-  fill.className='tfill'+(warn?' warn':'');
-  sel.className='tsecs'+(warn?' warn':'');
-  // Show final banner at ≤10s
-  if (warn && lastState) showFinalBanner(secs);
-  else if (!warn) hideFinalBanner();
-}
-setInterval(updateTimer,1000);
+// ── Timer + Final Banner trigger ─────────────────────────────
+setInterval(() => {
+  const secs = 60 - new Date().getUTCSeconds();
+  const pct  = (secs / 60) * 100;
+  const fill = document.getElementById('tfill');
+  const sel  = document.getElementById('tsecs');
+  fill.style.width = pct + '%';
+  sel.textContent  = secs + 's';
+  const warn = secs <= 10;
+  fill.className = 'tfill' + (warn ? ' warn' : '');
+  sel.className  = 'tsecs' + (warn ? ' warn' : '');
+
+  if (warn) {
+    triggerFinalBanner(secs);
+  } else {
+    if (!bannerDismissed) hideBanner();
+    bannerDismissed = false;
+  }
+}, 1000);
 
 // ── Final Banner ─────────────────────────────────────────────
-let bannerDismissed=false;
-let lastState=null;
+function triggerFinalBanner(secsLeft) {
+  if (!otcData) return;
+  const pairs = otcData.pairs;
 
-function showFinalBanner(secsLeft) {
-  if (bannerDismissed || !lastState) return;
-  const pairs=lastState.pairs;
+  // ── THE ALGORITHM: How we decide final signal ────────────
+  // Priority 1: CONFIRMED signals (3× same in a row) → most reliable
+  // Priority 2: Strong slope (linear regression) aligning with signal
+  // Priority 3: Majority direction if multiple pairs agree
+  // ONLY show banner if we have strong conviction
+
+  const confirmed = pairs.filter(p => p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65);
   
-  // Only show CONFIRMED signals
-  const confirmed=pairs.filter(p=>p.isConfirmed && p.signal!=='WAIT' && p.confidence>=65);
-  if (confirmed.length===0) return;
+  // Score each confirmed signal with slope alignment bonus
+  const scored = confirmed.map(p => {
+    let score = p.confidence;
+    // Slope aligns with signal = +15 bonus
+    if ((p.signal === 'BUY'  && p.slopeDir === 'UP')   ||
+        (p.signal === 'SELL' && p.slopeDir === 'DOWN')) {
+      score += 15;
+    }
+    // Strong slope = +10 bonus
+    if (p.slopeStrong) score += 10;
+    return { ...p, score };
+  });
+
+  if (scored.length === 0) return; // No confirmed signal — no banner
+
+  // Find dominant direction
+  const buys  = scored.filter(p => p.signal === 'BUY');
+  const sells = scored.filter(p => p.signal === 'SELL');
   
-  // Find the dominant signal direction
-  const buys=confirmed.filter(p=>p.signal==='BUY');
-  const sells=confirmed.filter(p=>p.signal==='SELL');
-  const dominant=buys.length>=sells.length ? 'BUY' : 'SELL';
-  const domPairs=dominant==='BUY' ? buys : sells;
+  // Need at least 1 confirmed pair
+  const dominant = buys.length >= sells.length ? 'BUY' : 'SELL';
+  const domPairs = (dominant === 'BUY' ? buys : sells)
+    .sort((a,b) => b.score - a.score);
+
+  if (domPairs.length === 0) return;
+
+  const best  = domPairs[0];
+  const sigKey = dominant + '-' + secsLeft;
+  if (sigKey === lastBannerSig) return; // Don't re-show same second
+  lastBannerSig = sigKey;
+
+  // Show banner
+  const wrap = document.getElementById('finalWrap');
+  wrap.className = 'final-wrap show ' + dominant.toLowerCase();
   
-  if (domPairs.length===0) return;
-  
-  const banner=document.getElementById('finalBanner');
-  const best=domPairs.sort((a,b)=>b.confidence-a.confidence)[0];
-  
-  banner.className='final-banner show '+(dominant==='BUY'?'buy':'sell');
-  document.getElementById('finalIcon').textContent=dominant==='BUY'?'▲':'▼';
-  document.getElementById('finalDir').textContent=dominant==='BUY'?'GO UP — CALL':'GO DOWN — PUT';
-  document.getElementById('finalSub').textContent=`${secsLeft}s LEFT · ${domPairs.length} pair${domPairs.length>1?'s':''} confirmed · ${best.confidence}% confidence`;
-  
-  const pairsEl=document.getElementById('finalPairs');
-  pairsEl.innerHTML=domPairs.slice(0,4).map(p=>
-    `<div class="fp-chip">${p.displayName.replace(' OTC','')}</div>`
+  document.getElementById('fIcon').textContent = dominant === 'BUY' ? '▲' : '▼';
+  document.getElementById('fDir').textContent  = dominant === 'BUY' ? 'GO UP — CALL' : 'GO DOWN — PUT';
+  document.getElementById('fDetail').textContent =
+    `${secsLeft}s left · ${domPairs.length} confirmed · Best: ${best.displayName.replace(' OTC','')} ${best.score}pts`;
+
+  document.getElementById('fPairs').innerHTML = domPairs.slice(0, 4).map(p =>
+    `<div class="fp">${p.displayName.replace(' OTC','')}<br><small style="opacity:0.7">${p.signal} ${p.confidence}%</small></div>`
   ).join('');
 }
 
-function hideFinalBanner() {
-  bannerDismissed=false;
-  document.getElementById('finalBanner').className='final-banner';
+function hideBanner() {
+  document.getElementById('finalWrap').className = 'final-wrap';
 }
-function dismissFinal(){
-  bannerDismissed=true;
-  document.getElementById('finalBanner').className='final-banner';
+function dismissBanner() {
+  bannerDismissed = true;
+  hideBanner();
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-function iClass(v,t){
-  if(v===null||v===undefined) return 'neutral';
-  if(t==='macd'||t==='ema') return typeof v==='string'?(v==='UP'||v.includes('bull')?'bullish':v==='DN'||v.includes('bear')?'bearish':'neutral'):'neutral';
-  if(t==='rsi') return v>=65?'dn':v<=35?'up':'neutral';
-  if(t==='stoch') return v>=80?'dn':v<=20?'up':'neutral';
-  if(t==='wr') return v>=-20?'dn':v<=-80?'up':'neutral';
+function iClass(v, t) {
+  if (v === null || v === undefined) return 'neutral';
+  if (t === 'macd' || t === 'ema') {
+    if (typeof v === 'string')
+      return (v === 'UP' || v.includes('bull')) ? 'bullish' :
+             (v === 'DN' || v.includes('bear')) ? 'bearish' : 'neutral';
+    return 'neutral';
+  }
+  if (t === 'rsi')   return v >= 65 ? 'dn' : v <= 35 ? 'up' : 'neutral';
+  if (t === 'stoch') return v >= 80 ? 'dn' : v <= 20 ? 'up' : 'neutral';
+  if (t === 'wr')    return v >= -20 ? 'dn' : v <= -80 ? 'up' : 'neutral';
   return 'neutral';
 }
-function iV(v){return (v===null||v===undefined)?'—':String(v);}
-function pClass(c){return c>=80?'hi':c>=65?'md':'lo';}
+function iV(v) { return (v === null || v === undefined) ? '—' : String(v); }
+function pC(c) { return c >= 80 ? 'hi' : c >= 65 ? 'md' : 'lo'; }
 
-// ── Render card ──────────────────────────────────────────────
+function slopeBar(slope, slopeDir) {
+  // Slope range -5 to +5 mapped to 0-100%
+  const pct = Math.min(50, Math.abs(parseFloat(slope||0)) * 10);
+  const col  = slopeDir === 'UP' ? 'up' : slopeDir === 'DOWN' ? 'dn' : 'flat';
+  const style = slopeDir === 'UP'
+    ? `right:0;width:${pct}%`
+    : slopeDir === 'DOWN'
+    ? `left:0;width:${pct}%`
+    : 'left:50%;width:2px';
+  return `<div class="slope-bar-wrap">
+    <div class="slope-bar-lbl">
+      <span class="slope-bar-name">MOMENTUM SLOPE</span>
+      <span class="slope-bar-val" style="color:var(--${slopeDir==='UP'?'buy':slopeDir==='DOWN'?'sell':'muted'})">${slopeDir} (${slope})</span>
+    </div>
+    <div class="slope-track">
+      <div class="slope-fill ${col}" style="${style}"></div>
+      <div class="slope-center"></div>
+    </div>
+  </div>`;
+}
+
+// ── Render one card ──────────────────────────────────────────
 function renderCard(p) {
-  const sig=p.signal.toLowerCase();
-  const isCrypto=p.isCrypto;
-  const isConf=p.isConfirmed && p.signal!=='WAIT';
-  const cardCls=`card ${sig}${isConf?' confirmed-'+sig:''}`;
-  const dq=Math.min(100,Math.round((p.candleCount/20)*100));
-  const shortName=p.displayName.replace(' OTC','');
-  
-  // Signal history dots
-  const hist=(p.signalHistory||[]).slice(-5);
-  const histDots=hist.map(s=>`<div class="hdot ${s.toLowerCase()}"></div>`).join('');
-  
-  return `<div class="${cardCls}" id="c-${p.symbol}">
+  const sig   = p.signal.toLowerCase();
+  const isConf = p.isConfirmed && p.signal !== 'WAIT';
+  const dq    = Math.min(100, Math.round((p.candleCount / 20) * 100));
+  const short = p.displayName.replace(' OTC','');
+  const hist  = (p.signalHistory || []).slice(-5);
+  const sDir  = (p.slopeDir || 'FLAT').toLowerCase() === 'up' ? 'up' :
+                (p.slopeDir || 'FLAT').toLowerCase() === 'down' ? 'dn' : 'flat';
+  const slopeLabel = sDir === 'up' ? '↑ UP' : sDir === 'dn' ? '↓ DOWN' : '→ FLAT';
+
+  return `<div class="card ${sig}${isConf?' confirmed-'+sig:''}" id="c-${p.symbol}">
     <div class="crow">
       <div>
-        <div class="pname">${shortName}</div>
+        <div class="pname">${short}</div>
         <div class="ptags">
-          ${isCrypto?'<span class="ctag">⚡ CRYPTO</span>':'<span class="otag">OTC</span>'}
-          ${isConf?'<span class="conf-tag confirmed">✓ CONFIRMED</span>':'<span class="conf-tag raw">RAW</span>'}
+          ${p.isCrypto ? '<span class="ctag">⚡ CRYPTO</span>' : '<span class="otag">OTC</span>'}
+          <span class="conf-tag ${isConf?'ok':'raw'}">${isConf?'✓ CONFIRMED':'BUILDING'}</span>
+          <span class="slope-tag ${sDir}">${slopeLabel}</span>
         </div>
       </div>
       <div class="sigbtn ${sig}">
@@ -358,10 +430,12 @@ function renderCard(p) {
       </div>
     </div>
 
+    ${slopeBar(p.slope, p.slopeDir || 'FLAT')}
+
     <div class="confrow">
       <div class="conflbl">
         <span class="confname">CONFIDENCE</span>
-        <span class="confpct ${pClass(p.confidence)}">${p.confidence}%</span>
+        <span class="confpct ${pC(p.confidence)}">${p.confidence}%</span>
       </div>
       <div class="conftrack">
         <div class="conffill ${sig}" style="width:${p.confidence}%"></div>
@@ -376,8 +450,9 @@ function renderCard(p) {
     </div>
 
     <div class="hist-row">
-      <span class="hist-lbl">LAST 5:</span>${histDots}
-      ${p.rawSignal&&p.rawSignal!==p.signal?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:6px">raw:${p.rawSignal}</span>`:''}
+      <span class="hist-lbl">LAST 5:</span>
+      ${hist.map(s=>`<div class="hdot ${s.toLowerCase()}"></div>`).join('')}
+      ${p.rawSignal&&p.rawSignal!==p.signal?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:4px">now:${p.rawSignal}</span>`:''}
     </div>
 
     <div class="tags">
@@ -393,103 +468,139 @@ function renderCard(p) {
   </div>`;
 }
 
-// ── Render full state ────────────────────────────────────────
-let init=false;
-function renderState(state) {
-  lastState=state;
-  const pairs=state.pairs;
-  const grid=document.getElementById('grid');
+// ── Render state ─────────────────────────────────────────────
+function renderOTCState(state) {
+  if (!state || !state.pairs) return;
+  otcData = state;
 
-  if(!init){
-    grid.innerHTML=pairs.map(renderCard).join('');
-    init=true;
+  const pairs = state.pairs;
+  const grid  = document.getElementById('grid');
+
+  if (!gridInit) {
+    grid.innerHTML = pairs.map(renderCard).join('');
+    gridInit = true;
   } else {
-    pairs.forEach(p=>{
-      const el=document.getElementById('c-'+p.symbol);
-      if(el){
-        const tmp=document.createElement('div');
-        tmp.innerHTML=renderCard(p);
+    pairs.forEach(p => {
+      const el = document.getElementById('c-' + p.symbol);
+      if (el) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = renderCard(p);
         el.replaceWith(tmp.firstElementChild);
       }
     });
   }
 
   // Stats
-  const buys=pairs.filter(p=>p.signal==='BUY').length;
-  const sells=pairs.filter(p=>p.signal==='SELL').length;
-  document.getElementById('sB').textContent=buys;
-  document.getElementById('sS').textContent=sells;
-  document.getElementById('sW').textContent=pairs.filter(p=>p.signal==='WAIT').length;
-  
-  const best=pairs.filter(p=>p.signal!=='WAIT'&&p.isConfirmed).sort((a,b)=>b.confidence-a.confidence)[0]
-    || pairs.filter(p=>p.signal!=='WAIT').sort((a,b)=>b.confidence-a.confidence)[0];
-  const bestEl=document.getElementById('sBest');
-  if(best){
-    bestEl.textContent=`${best.displayName.replace(' OTC','')} ${best.signal} ${best.confidence}%${best.isConfirmed?' ✓':''}`;
-    bestEl.style.color=best.signal==='BUY'?'var(--buy)':'var(--sell)';
-  } else bestEl.textContent='Building...';
+  const buys  = pairs.filter(p => p.signal === 'BUY').length;
+  const sells = pairs.filter(p => p.signal === 'SELL').length;
+  document.getElementById('sB').textContent = buys;
+  document.getElementById('sS').textContent = sells;
+  document.getElementById('sW').textContent = pairs.filter(p => p.signal === 'WAIT').length;
 
-  const t=new Date(state.serverTime);
-  document.getElementById('upd').textContent=`Updated ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())} UTC`;
+  const best = pairs
+    .filter(p => p.signal !== 'WAIT' && p.isConfirmed)
+    .sort((a,b) => b.confidence - a.confidence)[0]
+    || pairs.filter(p => p.signal !== 'WAIT').sort((a,b) => b.confidence - a.confidence)[0];
+
+  const bestEl = document.getElementById('sBest');
+  if (best) {
+    bestEl.textContent = `${best.displayName.replace(' OTC','')} ${best.signal} ${best.confidence}%${best.isConfirmed?' ✓':''}`;
+    bestEl.style.color = best.signal === 'BUY' ? 'var(--buy)' : 'var(--sell)';
+  } else {
+    bestEl.textContent = 'Building candles...';
+    bestEl.style.color = 'var(--text)';
+  }
+
+  const t = new Date(state.serverTime);
+  document.getElementById('upd').textContent =
+    `Updated ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())} UTC`;
 }
 
 // ── WebSocket ────────────────────────────────────────────────
-const WSU=location.hostname==='localhost'?'ws://localhost:3001':'wss://rk-dxb-trader.onrender.com';
-let ws, rtimer;
+const WSU = location.hostname === 'localhost'
+  ? 'ws://localhost:3001'
+  : 'wss://rk-dxb-trader.onrender.com';
 
-function connect(){
-  document.getElementById('conn').className='conn off';
-  document.getElementById('connTxt').textContent='Connecting';
-  ws=new WebSocket(WSU);
-  ws.onopen=()=>{
-    clearTimeout(rtimer);
-    ws.send(JSON.stringify({type:'auth',email:EMAIL,token:TOKEN}));
-  };
-  ws.onmessage=e=>{
-    try {
-      const msg=JSON.parse(e.data);
-      if(msg.type==='auth_ok'){
-        document.getElementById('conn').className='conn live';
-        document.getElementById('connTxt').textContent='Live';
-        return;
-      }
-      if(msg.type==='kicked'||msg.type==='auth_failed'){
-        alert('Session ended. Please login again.');
-        localStorage.removeItem('rk_auth_email');localStorage.removeItem('rk_auth_token');
-        location.href='index.html';return;
-      }
-      if(msg.type==='otc') renderState(msg);
-    } catch(e){}
-  };
-  ws.onclose=()=>{
-    document.getElementById('conn').className='conn off';
-    document.getElementById('connTxt').textContent='Reconnecting';
-    rtimer=setTimeout(connect,4000);
-  };
-  ws.onerror=()=>ws.close();
+let ws, reconnTimer;
+
+function setConn(cls, txt) {
+  document.getElementById('conn').className = 'conn ' + cls;
+  document.getElementById('connTxt').textContent = txt;
 }
 
-// Show skeletons
-document.getElementById('grid').innerHTML=[
+function connect() {
+  setConn('off', 'Connecting');
+  ws = new WebSocket(WSU);
+
+  ws.onopen = () => {
+    clearTimeout(reconnTimer);
+    ws.send(JSON.stringify({ type: 'auth', email: EMAIL, token: TOKEN }));
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'auth_ok') {
+        setConn('live', 'Live');
+        return;
+      }
+      if (msg.type === 'auth_failed' || msg.type === 'kicked') {
+        alert(msg.type === 'kicked'
+          ? '⚠️ Another device logged in. Session ended.'
+          : '⚠️ Session expired. Please login again.');
+        localStorage.removeItem('rk_auth_email');
+        localStorage.removeItem('rk_auth_token');
+        location.href = 'index.html';
+        return;
+      }
+      // Handle OTC state updates
+      if (msg.type === 'otc') {
+        renderOTCState(msg);
+      }
+      // Ignore type:'state' (forex) messages — this is the OTC page
+    } catch(err) { /* ignore parse errors */ }
+  };
+
+  ws.onclose = () => {
+    setConn('off', 'Reconnecting');
+    reconnTimer = setTimeout(connect, 4000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+// ── REST fallback — only if WS not connected ─────────────────
+// Polls every 4s but ONLY when WebSocket is NOT live
+// This prevents double-rendering and flickering
+function restPoll() {
+  if (ws && ws.readyState === WebSocket.OPEN) return; // WS is live, skip
+  fetch('https://rk-dxb-trader.onrender.com/api/otc')
+    .then(r => {
+      if (!r.ok) throw new Error('not ok');
+      return r.json();
+    })
+    .then(data => { if (data && data.pairs) renderOTCState(data); })
+    .catch(() => {}); // Silent fail
+}
+
+// ── Init ─────────────────────────────────────────────────────
+// Skeleton
+document.getElementById('grid').innerHTML = [
   'EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','EUR/GBP',
   'GBP/JPY','EUR/JPY','USD/CHF','NZD/USD','BTC/USD','ETH/USD'
-].map(n=>`<div class="card skel">
-  <div style="font-size:17px;font-weight:800;margin-bottom:12px">${n} OTC</div>
+].map(n => `<div class="card skel">
+  <div style="font-size:17px;font-weight:800;margin-bottom:10px">${n} OTC</div>
   <div class="skline" style="width:60%"></div>
-  <div class="skline" style="width:100%;height:4px;margin:14px 0"></div>
+  <div class="skline" style="width:100%;height:4px;margin:12px 0"></div>
   <div class="skline" style="width:80%"></div>
+  <div class="skline" style="width:50%"></div>
 </div>`).join('');
 
 connect();
-// REST fallback every 3s
-setInterval(()=>{
-  fetch('https://rk-dxb-trader.onrender.com/api/otc')
-    .then(r=>r.json()).then(renderState).catch(()=>{});
-},3000);
-setTimeout(()=>{
-  fetch('https://rk-dxb-trader.onrender.com/api/otc')
-    .then(r=>r.json()).then(renderState).catch(()=>{});
-},1000);
+
+// Initial REST fetch after 1s
+setTimeout(restPoll, 1000);
+// REST fallback every 4s (only fires when WS is down)
+setInterval(restPoll, 4000);
 </script>
 </body>
 </html>
