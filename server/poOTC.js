@@ -6,7 +6,7 @@
 // ================================================================
 
 const fetch = require('node-fetch');
-const { calculateSignal } = require('./signalEngine');
+const { calculateOTCSignal } = require('./otcSignalEngine');
 
 // All 12 OTC pairs confirmed working
 const OTC_PAIRS = [
@@ -45,26 +45,20 @@ function parseSVG(svgText) {
   const pts = match[1].trim().split(' ').map(p => {
     const parts = p.split(',');
     return { x: parseFloat(parts[0]), y: parseFloat(parts[1]) };
-  }).filter(p => !isNaN(p.x) && !isNaN(p.y) && p.y !== 55 && p.y !== 0);
+  }).filter(p => !isNaN(p.x) && !isNaN(p.y) && p.y !== 55);
   
   if (pts.length === 0) return [];
   
-  // Find actual price range in this SVG
-  const ys = pts.map(p => p.y);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const range = maxY - minY;
-  
-  if (range === 0) return pts.map(p => ({ x: p.x, price: 0.5 }));
-  
-  // Normalize: lower Y = higher price
+  // Use fixed 55px scale (SVG height) for consistent normalization
+  // Lower Y = higher price. Scale: 0 = highest possible, 55 = lowest possible
+  // We scale to 100 for better indicator sensitivity
   return pts.map(p => ({
     x: p.x,
-    price: parseFloat(((maxY - p.y) / range).toFixed(4))
+    price: parseFloat(((55 - p.y) / 55 * 100).toFixed(4)) // Scale to 0-100 range
   }));
 }
 
-// Fetch one OTC pair
+// Fetch one OTC pair — returns full SVG point array
 async function fetchOTCTick(symbol) {
   const ts = Date.now() / 1000;
   const url = `https://po-static.com/uploads/img_favourites_symbols/${symbol}.svg?v=${ts}`;
@@ -81,49 +75,66 @@ async function fetchOTCTick(symbol) {
   }
 }
 
-// Build/update 1-minute candle from ticks
-function updateCandle(symbol, normalizedPrice, timestamp) {
+// Build a candle directly from SVG points
+// SVG has ~60 points covering last ~60 seconds = 1 complete minute
+// Split into halves: 1st half = previous candle context, 2nd half = current forming candle
+function buildCandleFromSVG(pts) {
+  const prices = pts.map(p => p.price);
+  if (prices.length < 4) return null;
+  
+  // Use all points as one candle (this SVG = 1-min window)
+  const open  = prices[0];
+  const close = prices[prices.length - 1];
+  const high  = Math.max(...prices);
+  const low   = Math.min(...prices);
+  
+  return { open, high, low, close, volume: prices.length };
+}
+
+// Update candle store every fetch — push new SVG-derived candle
+function updateCandle(symbol, pts, timestamp) {
   const ticks = tickHistory[symbol];
   
-  // Keep last 300 ticks (5 min)
-  ticks.push({ price: normalizedPrice, ts: timestamp });
+  // Track last price for display
+  const currentPrice = pts[pts.length - 1].price;
+  ticks.push({ price: currentPrice, ts: timestamp });
   if (ticks.length > 300) ticks.shift();
   
-  // Build 1-minute candle
-  const now = new Date(timestamp);
+  // Each SVG fetch = snapshot of last 60s
+  // We use minute-based bucketing to avoid duplicate candles
   const candleMinute = Math.floor(timestamp / 60000) * 60000;
   
   if (!currentCandle[symbol] || currentCandle[symbol].minute !== candleMinute) {
     // Close previous candle
     if (currentCandle[symbol] && currentCandle[symbol].tickCount > 0) {
-      const closed = {
-        time: new Date(currentCandle[symbol].minute).toISOString(),
-        open: currentCandle[symbol].open,
-        high: currentCandle[symbol].high,
-        low: currentCandle[symbol].low,
-        close: currentCandle[symbol].close,
-        volume: currentCandle[symbol].tickCount,
-        minute: currentCandle[symbol].minute
-      };
-      candleStore[symbol].push(closed);
+      const c = currentCandle[symbol];
+      candleStore[symbol].push({
+        time: new Date(c.minute).toISOString(),
+        open: c.open, high: c.high, low: c.low, close: c.close,
+        volume: c.tickCount, minute: c.minute
+      });
       if (candleStore[symbol].length > 100) candleStore[symbol].shift();
     }
     
-    // Start new candle
+    // Start new candle from SVG data
+    const svgCandle = buildCandleFromSVG(pts);
     currentCandle[symbol] = {
       minute: candleMinute,
-      open: normalizedPrice,
-      high: normalizedPrice,
-      low: normalizedPrice,
-      close: normalizedPrice,
+      open: svgCandle ? svgCandle.open : currentPrice,
+      high: svgCandle ? svgCandle.high : currentPrice,
+      low:  svgCandle ? svgCandle.low  : currentPrice,
+      close: currentPrice,
       tickCount: 1
     };
   } else {
-    // Update current candle
+    // Update current candle with latest SVG data
+    const svgCandle = buildCandleFromSVG(pts);
     const c = currentCandle[symbol];
-    if (normalizedPrice > c.high) c.high = normalizedPrice;
-    if (normalizedPrice < c.low) c.low = normalizedPrice;
-    c.close = normalizedPrice;
+    if (svgCandle) {
+      if (svgCandle.high > c.high) c.high = svgCandle.high;
+      if (svgCandle.low < c.low) c.low = svgCandle.low;
+    }
+    c.close = currentPrice;
     c.tickCount++;
   }
 }
@@ -138,11 +149,11 @@ function calcOTCSignal(symbol) {
     candles.push({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.tickCount });
   }
   
-  if (candles.length < 10) {
+  if (candles.length < 5) {
     return { signal: 'WAIT', confidence: 0, reason: 'Building data...' };
   }
   
-  return calculateSignal(candles);
+  return calculateOTCSignal(candles);
 }
 
 // Main update loop — fetch all OTC pairs every second
@@ -153,18 +164,14 @@ async function updateOTCPair(symbol) {
   const pts = await fetchOTCTick(symbol);
   if (!pts || pts.length === 0) return;
   
-  // Current price = last point in SVG (most recent tick)
-  const currentPt = pts[pts.length - 1];
-  const currentPrice = currentPt.price;
-  const prevPrice = lastPrices[symbol];
-  
+  const currentPrice = pts[pts.length - 1].price;
   lastPrices[symbol] = currentPrice;
   
-  // Update candle with this tick
-  updateCandle(symbol, currentPrice, Date.now());
+  // Update candle using full SVG point array
+  updateCandle(symbol, pts, Date.now());
   
-  // Recalculate signal every 5 ticks
-  if (updateCount % 5 === 0) {
+  // Recalculate signal every 2 ticks
+  if (updateCount % 2 === 0) {
     const result = calcOTCSignal(symbol);
     lastSignals[symbol] = { ...result, updatedAt: new Date().toISOString() };
   }
@@ -200,6 +207,7 @@ function getOTCState() {
       trend,
       currentPrice: lastTick?.price || null,
       candleCount: candleStore[symbol].length,
+      recentPrices: tickHistory[symbol].slice(-10).map(t => t.price),
       rsi: signal.rsi,
       macd: signal.macd,
       emaTrend: signal.emaTrend,
