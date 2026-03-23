@@ -153,7 +153,8 @@ function calcOTCSignal(symbol) {
     return { signal: 'WAIT', confidence: 0, reason: 'Building data...' };
   }
   
-  return calculateOTCSignal(candles);
+  // Pass symbol for confirmation tracking
+  return calculateOTCSignal(symbol, candles);
 }
 
 // Main update loop — fetch all OTC pairs every second
