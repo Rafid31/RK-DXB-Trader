@@ -16,25 +16,25 @@ const qxHistory  = {};  // sym -> signal history for confirmation
 let lastPush  = null;   // timestamp of last extension push
 let totalPairs = 0;
 
-// QX OTC pairs we track
+// QX OTC pairs we track — ALL LOWERCASE to match normalizeSymbol() output
 const QX_PAIRS = [
-  'EURUSD_otc','GBPUSD_otc','USDJPY_otc','AUDUSD_otc','USDCAD_otc',
-  'EURGBP_otc','GBPJPY_otc','EURJPY_otc','USDCHF_otc','NZDUSD_otc',
-  'AUDCAD_otc','AUDNZD_otc','CADJPY_otc','AUDCHF_otc','NZDCHF_otc',
-  'GBPCAD_otc','EURCAD_otc','EURCHF_otc','GBPAUD_otc','NZDJPY_otc',
-  'BTCUSD_otc','ETHUSD_otc','LTCUSD_otc','XRPUSD_otc'
+  'eurusd_otc','gbpusd_otc','usdjpy_otc','audusd_otc','usdcad_otc',
+  'eurgbp_otc','gbpjpy_otc','eurjpy_otc','usdchf_otc','nzdusd_otc',
+  'audcad_otc','audnzd_otc','cadjpy_otc','audchf_otc','nzdchf_otc',
+  'gbpcad_otc','eurcad_otc','eurchf_otc','gbpaud_otc','nzdjpy_otc',
+  'btcusd_otc','ethusd_otc','ltcusd_otc','xrpusd_otc'
 ];
 
 const DISPLAY = {
-  'EURUSD_otc':'EUR/USD','GBPUSD_otc':'GBP/USD','USDJPY_otc':'USD/JPY',
-  'AUDUSD_otc':'AUD/USD','USDCAD_otc':'USD/CAD','EURGBP_otc':'EUR/GBP',
-  'GBPJPY_otc':'GBP/JPY','EURJPY_otc':'EUR/JPY','USDCHF_otc':'USD/CHF',
-  'NZDUSD_otc':'NZD/USD','AUDCAD_otc':'AUD/CAD','AUDNZD_otc':'AUD/NZD',
-  'CADJPY_otc':'CAD/JPY','AUDCHF_otc':'AUD/CHF','NZDCHF_otc':'NZD/CHF',
-  'GBPCAD_otc':'GBP/CAD','EURCAD_otc':'EUR/CAD','EURCHF_otc':'EUR/CHF',
-  'GBPAUD_otc':'GBP/AUD','NZDJPY_otc':'NZD/JPY',
-  'BTCUSD_otc':'BTC/USD','ETHUSD_otc':'ETH/USD',
-  'LTCUSD_otc':'LTC/USD','XRPUSD_otc':'XRP/USD'
+  'eurusd_otc':'EUR/USD','gbpusd_otc':'GBP/USD','usdjpy_otc':'USD/JPY',
+  'audusd_otc':'AUD/USD','usdcad_otc':'USD/CAD','eurgbp_otc':'EUR/GBP',
+  'gbpjpy_otc':'GBP/JPY','eurjpy_otc':'EUR/JPY','usdchf_otc':'USD/CHF',
+  'nzdusd_otc':'NZD/USD','audcad_otc':'AUD/CAD','audnzd_otc':'AUD/NZD',
+  'cadjpy_otc':'CAD/JPY','audchf_otc':'AUD/CHF','nzdchf_otc':'NZD/CHF',
+  'gbpcad_otc':'GBP/CAD','eurcad_otc':'EUR/CAD','eurchf_otc':'EUR/CHF',
+  'gbpaud_otc':'GBP/AUD','nzdjpy_otc':'NZD/JPY',
+  'btcusd_otc':'BTC/USD','ethusd_otc':'ETH/USD',
+  'ltcusd_otc':'LTC/USD','xrpusd_otc':'XRP/USD'
 };
 
 // Process incoming ticks from extension
