@@ -257,7 +257,7 @@ body::before{content:'';position:fixed;inset:0;
 <script>
 'use strict';
 const EMAIL = localStorage.getItem('rk_auth_email');
-const TOKEN = localStorage.getItem('rk_auth_token');
+let TOKEN = localStorage.getItem('rk_auth_token');
 if (!EMAIL || !TOKEN) location.href = 'index.html';
 
 async function logout() {
@@ -447,7 +447,18 @@ function connect() {
     try {
       const msg = JSON.parse(e.data);
       if (msg.type==='auth_ok') { setConn('live','Live'); return; }
-      if (msg.type==='kicked'||msg.type==='auth_failed') {
+      if (msg.type==='token_refresh') {
+        // Server restarted and re-issued a new token — save it silently
+        TOKEN = msg.token;
+        localStorage.setItem('rk_auth_token', TOKEN);
+        return;
+      }
+      if (msg.type==='kicked') {
+        // Kicked because another device logged in — force re-login
+        localStorage.removeItem('rk_auth_email'); localStorage.removeItem('rk_auth_token'); location.href='index.html'; return;
+      }
+      if (msg.type==='auth_failed') {
+        // Email not authorized — redirect to login
         localStorage.removeItem('rk_auth_email'); localStorage.removeItem('rk_auth_token'); location.href='index.html'; return;
       }
       if (msg.type==='qx') renderState(msg);

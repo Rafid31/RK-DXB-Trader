@@ -252,7 +252,7 @@ body::before{content:'';position:fixed;inset:0;
 'use strict';
 // ── Auth ────────────────────────────────────────────────────
 const EMAIL = localStorage.getItem('rk_auth_email');
-const TOKEN = localStorage.getItem('rk_auth_token');
+let TOKEN = localStorage.getItem('rk_auth_token');
 if (!EMAIL || !TOKEN) { location.href = 'index.html'; }
 
 async function logout() {
@@ -545,10 +545,21 @@ function connect() {
         setConn('live', 'Live');
         return;
       }
-      if (msg.type === 'auth_failed' || msg.type === 'kicked') {
-        alert(msg.type === 'kicked'
-          ? '⚠️ Another device logged in. Session ended.'
-          : '⚠️ Session expired. Please login again.');
+      if (msg.type === 'token_refresh') {
+        // Server restarted — silently accept new token, no disruption
+        TOKEN = msg.token;
+        localStorage.setItem('rk_auth_token', TOKEN);
+        return;
+      }
+      if (msg.type === 'kicked') {
+        alert('⚠️ Another device logged in. Session ended.');
+        localStorage.removeItem('rk_auth_email');
+        localStorage.removeItem('rk_auth_token');
+        location.href = 'index.html';
+        return;
+      }
+      if (msg.type === 'auth_failed') {
+        // Email not authorized — redirect to login
         localStorage.removeItem('rk_auth_email');
         localStorage.removeItem('rk_auth_token');
         location.href = 'index.html';

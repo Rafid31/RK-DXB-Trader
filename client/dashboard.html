@@ -710,7 +710,7 @@
 <script>
 // ── Auth Guard ──────────────────────────────────────────
 const AUTH_EMAIL = localStorage.getItem('rk_auth_email');
-const AUTH_TOKEN = localStorage.getItem('rk_auth_token');
+let AUTH_TOKEN = localStorage.getItem('rk_auth_token');
 if (!AUTH_EMAIL || !AUTH_TOKEN) {
   window.location.href = 'index.html';
 }
@@ -750,9 +750,23 @@ function connect() {
         updateConnBadge('connected', 'Live');
         return;
       }
-      if (msg.type === 'auth_failed' || msg.type === 'kicked') {
+      if (msg.type === 'token_refresh') {
+        // Server restarted and re-issued a new token — save it silently, no disruption
+        AUTH_TOKEN = msg.token;
+        localStorage.setItem('rk_auth_token', AUTH_TOKEN);
+        return;
+      }
+      if (msg.type === 'kicked') {
         updateConnBadge('disconnected', 'Session ended');
-        alert(msg.type === 'kicked' ? '⚠️ You were logged in from another device. This session has ended.' : '⚠️ Session expired. Please login again.');
+        alert('⚠️ You were logged in from another device. This session has ended.');
+        localStorage.removeItem('rk_auth_email');
+        localStorage.removeItem('rk_auth_token');
+        window.location.href = 'index.html';
+        return;
+      }
+      if (msg.type === 'auth_failed') {
+        // Email not in authorized list — redirect to login
+        updateConnBadge('disconnected', 'Unauthorized');
         localStorage.removeItem('rk_auth_email');
         localStorage.removeItem('rk_auth_token');
         window.location.href = 'index.html';

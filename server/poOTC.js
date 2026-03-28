@@ -248,7 +248,7 @@ function getOTCState() {
       slopeDir: lastSlopes[symbol]?.slopeDir || 'FLAT',
       slopeStrong: !!lastSlopes[symbol]?.slopeStrong,
       isOTC: true,
-      isCrypto: symbol.includes('BTC') || symbol.includes('ETH')
+      isCrypto: symbol.toLowerCase().includes('btc') || symbol.toLowerCase().includes('eth')
     };
   });
 }

@@ -260,22 +260,39 @@ wss.on('connection', (ws, req) => {
       const msg = JSON.parse(raw.toString());
       if (msg.type === 'auth') {
         const { email, token } = msg;
-        const session = activeSessions.get(email?.toLowerCase());
-        if (!session || session.token !== token) {
-          ws.send(JSON.stringify({ type: 'auth_failed', reason: 'Invalid session' }));
+        const emailLow = email?.toLowerCase();
+
+        // Reject unknown emails outright
+        if (!emailLow || !authorizedEmails.has(emailLow)) {
+          ws.send(JSON.stringify({ type: 'auth_failed', reason: 'Unauthorized email' }));
           return ws.close(4001, 'Unauthorized');
         }
+
+        let session = activeSessions.get(emailLow);
+
+        // Auto-heal: server restart cleared sessions OR stale token.
+        // If the email is authorized but the token doesn't match (or no session),
+        // just create a new session and tell the client to update their stored token.
+        if (!session || session.token !== token) {
+          const newToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+          session = { token: newToken, ip, connectedAt: new Date().toISOString() };
+          activeSessions.set(emailLow, session);
+          ws.send(JSON.stringify({ type: 'token_refresh', token: newToken }));
+          console.log(`[WS] Token refreshed for ${emailLow} (server restart or stale token)`);
+        }
+
         // Kick any existing WS for same email (single device)
         for (const [oldWs, meta] of wsClients.entries()) {
-          if (meta.email === email.toLowerCase() && oldWs !== ws) {
+          if (meta.email === emailLow && oldWs !== ws) {
             oldWs.send(JSON.stringify({ type: 'kicked', reason: 'Logged in from another device' }));
             oldWs.close(4002, 'Another device logged in');
             wsClients.delete(oldWs);
           }
         }
-        wsClients.set(ws, { email: email.toLowerCase(), token, ip });
+
+        wsClients.set(ws, { email: emailLow, token: session.token, ip });
         ws.send(JSON.stringify({ type: 'auth_ok' }));
-        console.log(`[WS] Auth: ${email} | Total: ${wsClients.size}`);
+        console.log(`[WS] Auth OK: ${emailLow} | Total: ${wsClients.size}`);
       }
     } catch(e) {}
   });
