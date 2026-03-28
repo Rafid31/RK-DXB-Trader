@@ -201,7 +201,22 @@ async function updateOTCPair(symbol) {
   
   // Recalculate signal every 2 ticks
   if (updateCount % 2 === 0) {
-    const result = calcOTCSignal(symbol);
+    let result = calcOTCSignal(symbol);
+
+    // ── Slope override for accuracy ──────────────────────
+    // If the LIVE SVG slope (this fetch) contradicts the candle-based signal,
+    // or is FLAT, override to WAIT. This prevents false signals from stale candles.
+    if (slopeDir === 'FLAT') {
+      // No clear direction right now — do not signal
+      result = { ...result, signal: 'WAIT', confidence: 0, isConfirmed: false };
+    } else if (
+      (slopeDir === 'UP'   && result.signal === 'SELL') ||
+      (slopeDir === 'DOWN' && result.signal === 'BUY')
+    ) {
+      // Candle history and live price moving in opposite directions — too risky
+      result = { ...result, signal: 'WAIT', confidence: 0, isConfirmed: false };
+    }
+
     lastSignals[symbol] = { ...result, slope: parseFloat(slope.toFixed(3)), slopeDir, slopeStrong, updatedAt: new Date().toISOString() };
   }
 }

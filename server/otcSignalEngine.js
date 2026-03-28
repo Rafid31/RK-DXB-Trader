@@ -80,7 +80,7 @@ function detectPattern(candles) {
 }
 
 function calcRawSignal(candles) {
-  if(!candles||candles.length<5) return {signal:'WAIT',confidence:0};
+  if(!candles||candles.length<10) return {signal:'WAIT',confidence:0};
   const closes=candles.map(c=>c.close);
   const highs=candles.map(c=>c.high);
   const lows=candles.map(c=>c.low);

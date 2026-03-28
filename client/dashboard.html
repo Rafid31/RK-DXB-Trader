@@ -860,7 +860,7 @@ function hideEnterNow() {
 }
 
 // ── Session Pills ────────────────────────────────────────
-function updateSessions(sessions, marketOpen, nextEvent) {
+function updateSessions(sessions, marketOpen, nextEvent, state) {
   const sessionMap = { london: 'London', newYork: 'New York', tokyo: 'Tokyo', sydney: 'Sydney' };
   const active = (sessions || []).map(s => s.toLowerCase().replace(' ',''));
 
@@ -898,10 +898,27 @@ function updateSessions(sessions, marketOpen, nextEvent) {
     document.getElementById('closedNextEvent').textContent = `${nextEvent.name} in ${timeStr}`;
   }
 
-  // Market closed overlay — only affects FOREX cards, crypto stays live
-  // Show overlay only when forex is closed AND only blur forex cards
+  // Weekend: show banner + hide old full-screen overlay (crypto must stay visible)
+  // Weeknight close (not weekend): show full overlay briefly
   const closedOverlay = document.getElementById('marketClosed');
-  closedOverlay.style.display = marketOpen ? 'none' : 'flex';
+  closedOverlay.style.display = 'none'; // always hidden — individual cards handle closed state now
+
+  // Weekend banner
+  let wkBanner = document.getElementById('weekendBanner');
+  if (!wkBanner) {
+    wkBanner = document.createElement('div');
+    wkBanner.id = 'weekendBanner';
+    wkBanner.style.cssText = 'position:sticky;top:52px;z-index:90;padding:8px 20px;background:rgba(74,90,128,0.15);border-bottom:1px solid rgba(74,90,128,0.25);display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:11px;color:var(--muted)';
+    const main = document.querySelector('main') || document.body;
+    main.insertBefore(wkBanner, main.firstChild);
+  }
+  if (!marketOpen && state && state.weekend) {
+    wkBanner.style.display = 'flex';
+    const ev = nextEvent ? `· ${nextEvent.name} opens in ${nextEvent.minutesAway < 60 ? nextEvent.minutesAway+'m' : Math.floor(nextEvent.minutesAway/60)+'h '+nextEvent.minutesAway%60+'m'}` : '';
+    wkBanner.innerHTML = `<span style="color:var(--sell)">🔒</span> <span><b style="color:var(--text)">Weekend — Forex Market Closed</b> ${ev}</span><span style="margin-left:auto;color:var(--gold)">⚡ BTC/ETH trading 24/7</span>`;
+  } else {
+    wkBanner.style.display = 'none';
+  }
 }
 
 // ── Confidence Fill Color ────────────────────────────────
@@ -950,8 +967,26 @@ function formatPrice(price) {
 
 // ── Render a Pair Card ───────────────────────────────────
 function renderCard(p) {
-  const sigClass = p.signal === 'BUY' ? 'buy' : p.signal === 'SELL' ? 'sell' : 'wait';
   const isCrypto = p.type === 'crypto';
+
+  // Weekend / market-closed forex card
+  if (p.closed && !isCrypto) {
+    return `<div class="pair-card signal-closed" id="card-${p.symbol.replace('/','_')}" data-type="forex">
+      <div class="card-top">
+        <div>
+          <div class="pair-name">${p.symbol}</div>
+          <div class="price-row"><span class="price-val">${formatPrice(p.price)}</span></div>
+        </div>
+        <span class="signal-badge" style="background:rgba(74,90,128,0.15);color:var(--muted);border:1px solid var(--muted2)">🔒 CLOSED</span>
+      </div>
+      <div style="text-align:center;padding:14px 0 10px;font-size:11px;font-family:var(--font-mono);color:var(--muted);line-height:1.9">
+        Weekend · Market Closed<br>
+        <span style="color:var(--muted2);font-size:10px">Resumes Sunday 21:00 UTC</span>
+      </div>
+    </div>`;
+  }
+
+  const sigClass = p.signal === 'BUY' ? 'buy' : p.signal === 'SELL' ? 'sell' : 'wait';
   const cardClass = 'pair-card signal-' + p.signal.toLowerCase() + (isCrypto ? ' crypto-card' : '');
 
   const changeStr = p.change >= 0
@@ -1044,7 +1079,7 @@ function renderState(state) {
   if (!state || !state.pairs) return;
 
   // Sessions
-  updateSessions(state.sessions, state.marketOpen, state.nextEvent);
+  updateSessions(state.sessions, state.marketOpen, state.nextEvent, state);
   // Crypto cards always show live regardless of forex session
 
   // Timer

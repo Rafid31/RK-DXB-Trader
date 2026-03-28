@@ -14,7 +14,7 @@ const { fetchCryptoCandles } = require('./binance');
 const { updateAllOTC, getOTCState } = require('./poOTC');
 const { processTicks: qxProcessTicks, getQXState } = require('./qxEngine');
 const { calculateSignal } = require('./signalEngine');
-const { getCurrentSessions, isMarketOpen, isForexOpen, isHighVolatilitySession, getNextSessionEvent, getSessionAlerts } = require('./sessions');
+const { getCurrentSessions, isMarketOpen, isForexOpen, isForexWeekend, isHighVolatilitySession, getNextSessionEvent, getSessionAlerts } = require('./sessions');
 const { sendTelegram, formatSignalAlert, formatSessionAlert } = require('./telegram');
 
 const PORT = process.env.PORT || 3001;
@@ -113,6 +113,7 @@ function buildState() {
   const sessions = getCurrentSessions();
   const nextEvent = getNextSessionEvent();
   const marketOpen = isForexOpen(); // forex session open
+  const weekend = isForexWeekend();
   const cryptoActive = true; // crypto always 24/7
   const now = new Date();
   const pairs = ALL_PAIRS.map(p => {
@@ -121,12 +122,16 @@ function buildState() {
     const price = candles.length > 0 ? candles[candles.length - 1].close : null;
     const prev = candles.length > 1 ? candles[candles.length - 2].close : null;
     const change = price && prev ? ((price - prev) / prev) * 100 : 0;
+    // Forex pairs show CLOSED during weekend — crypto trades 24/7
+    const isClosed = weekend && p.type === 'forex';
     return {
       symbol: p.symbol,
       type: p.type || 'forex',
       price: price ? (price >= 1000 ? price.toFixed(2) : price > 10 ? price.toFixed(3) : price.toFixed(5)) : '—',
       change: +change.toFixed(3),
-      signal: signal.signal || 'WAIT', confidence: signal.confidence || 0,
+      signal: isClosed ? 'CLOSED' : (signal.signal || 'WAIT'),
+      confidence: isClosed ? 0 : (signal.confidence || 0),
+      closed: isClosed,
       rsi: signal.rsi, stoch: signal.stoch, macd: signal.macd,
       wr: signal.wr, cci: signal.cci, emaTrend: signal.emaTrend,
       pattern: signal.pattern, streak: signal.streak, bbPos: signal.bbPos,
@@ -135,7 +140,7 @@ function buildState() {
   });
   return {
     type: 'state', pairs, sessions: sessions.map(s => s.name),
-    marketOpen, cryptoActive: true, nextEvent,
+    marketOpen, weekend, cryptoActive: true, nextEvent,
     serverTime: now.toISOString(),
     secsRemainingInCandle: 60 - now.getUTCSeconds()
   };

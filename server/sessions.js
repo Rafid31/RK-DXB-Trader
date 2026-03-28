@@ -33,20 +33,34 @@ function getCurrentSessions() {
   return active;
 }
 
-// Forex market open = any major session active
-// Sydney + Tokyo = Asian session (backtesting only, but still "open" for data)
+// ── Weekend detection ────────────────────────────────────────
+// Forex closes Friday 21:00 UTC, reopens Sunday 21:00 UTC
+function isForexWeekend() {
+  const now = new Date();
+  const day  = now.getUTCDay();   // 0=Sun 1=Mon … 5=Fri 6=Sat
+  const hour = now.getUTCHours();
+  if (day === 6) return true;                  // All Saturday
+  if (day === 5 && hour >= 21) return true;    // Friday after 21:00 UTC
+  if (day === 0 && hour < 21) return true;     // Sunday before 21:00 UTC
+  return false;
+}
+
+// Forex market open = not weekend AND any major session active
 function isMarketOpen() {
+  if (isForexWeekend()) return false;
   return getCurrentSessions().length > 0;
 }
 
 // Only send Telegram signals during London + NY (high volume, real trading)
 function isHighVolatilitySession() {
+  if (isForexWeekend()) return false;
   const sessions = getCurrentSessions();
   return sessions.some(s => s.key === 'london' || s.key === 'newYork');
 }
 
 // Is any session currently active (for showing "market open" vs "market closed")
 function isForexOpen() {
+  if (isForexWeekend()) return false;
   return getCurrentSessions().length > 0;
 }
 
@@ -105,6 +119,6 @@ function getSessionAlerts() {
 }
 
 module.exports = {
-  getCurrentSessions, isMarketOpen, isForexOpen,
+  getCurrentSessions, isMarketOpen, isForexOpen, isForexWeekend,
   isHighVolatilitySession, getNextSessionEvent, getSessionAlerts
 };
