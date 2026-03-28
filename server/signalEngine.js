@@ -235,7 +235,7 @@ function emaTrend(closes) {
   if (ema200 && price > ema200) score++;
   if (ema8 > ema21) score++;
 
-  const bias = score >= 4 ? 1 : score <= 1 ? -1 : 0;
+  const bias = score >= 3 ? 1 : score <= 1 ? -1 : 0;
   const trend = bias === 1 ? 'bullish' : bias === -1 ? 'bearish' : 'neutral';
 
   return { bias, trend, score, emas: { ema8, ema21, ema55, ema200 } };
@@ -271,8 +271,10 @@ function calculateSignal(candles) {
   if (rsi !== null) {
     if (rsi < 30) { upVotes += 2; reasons.push(`RSI oversold ${rsi.toFixed(1)}`); }
     else if (rsi < 40) { upVotes += 1; reasons.push(`RSI low ${rsi.toFixed(1)}`); }
+    else if (rsi < 45) { upVotes += 1; reasons.push(`RSI weak low ${rsi.toFixed(1)}`); }
     else if (rsi > 70) { downVotes += 2; reasons.push(`RSI overbought ${rsi.toFixed(1)}`); }
     else if (rsi > 60) { downVotes += 1; reasons.push(`RSI high ${rsi.toFixed(1)}`); }
+    else if (rsi > 55) { downVotes += 1; reasons.push(`RSI weak high ${rsi.toFixed(1)}`); }
   }
 
   // ── EMA vote ────────────────────────────────────────────────
@@ -344,14 +346,14 @@ function calculateSignal(candles) {
   const maxVotes = 20; // max possible
   const upPct = totalVotes > 0 ? (upVotes / (upVotes + downVotes)) * 100 : 50;
 
-  // Need at least 4 total votes and clear majority (60%+)
+  // Need at least 3 total votes and clear majority (60%+)
   let signal = 'WAIT';
   let confidence = 0;
 
-  if (totalVotes >= 4 && upPct >= 60) {
+  if (totalVotes >= 3 && upPct >= 60) {
     signal = 'BUY';
     confidence = Math.min(95, Math.round(50 + (upPct - 50) * 1.5));
-  } else if (totalVotes >= 4 && upPct <= 40) {
+  } else if (totalVotes >= 3 && upPct <= 40) {
     signal = 'SELL';
     confidence = Math.min(95, Math.round(50 + (50 - upPct) * 1.5));
   }
