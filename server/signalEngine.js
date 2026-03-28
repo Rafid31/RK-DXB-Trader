@@ -269,9 +269,11 @@ function calculateSignal(candles) {
 
   // ── RSI vote ────────────────────────────────────────────────
   if (rsi !== null) {
-    if (rsi < 30) { upVotes += 2; reasons.push(`RSI oversold ${rsi.toFixed(1)}`); }
+    if (rsi < 20) { upVotes += 4; reasons.push(`RSI extreme oversold ${rsi.toFixed(1)}`); }
+    else if (rsi < 30) { upVotes += 2; reasons.push(`RSI oversold ${rsi.toFixed(1)}`); }
     else if (rsi < 40) { upVotes += 1; reasons.push(`RSI low ${rsi.toFixed(1)}`); }
     else if (rsi < 45) { upVotes += 1; reasons.push(`RSI weak low ${rsi.toFixed(1)}`); }
+    else if (rsi > 80) { downVotes += 4; reasons.push(`RSI extreme overbought ${rsi.toFixed(1)}`); }
     else if (rsi > 70) { downVotes += 2; reasons.push(`RSI overbought ${rsi.toFixed(1)}`); }
     else if (rsi > 60) { downVotes += 1; reasons.push(`RSI high ${rsi.toFixed(1)}`); }
     else if (rsi > 55) { downVotes += 1; reasons.push(`RSI weak high ${rsi.toFixed(1)}`); }
