@@ -131,6 +131,19 @@ function analyzeCurrentFetch(pts) {
   const pricePos = fetchH === fetchL ? 50 :
     parseFloat(((prices[n - 1] - fetchL) / (fetchH - fetchL) * 100).toFixed(1));
 
+  // ── 15-second quadrant analysis (Q1..Q4, ~15 s each) ────────
+  // Split 62 pts into 4 equal quarters → each is ~15 real seconds.
+  // Q4 slope = closing momentum of the current candle.
+  const qSz = Math.max(Math.floor(n / 4), 3);
+  const quads = {
+    q1:    linSlope(prices.slice(0, qSz)),
+    q2:    linSlope(prices.slice(qSz, qSz * 2)),
+    q3:    linSlope(prices.slice(qSz * 2, qSz * 3)),
+    q4:    linSlope(prices.slice(qSz * 3)),   // last ~15 s = closing momentum
+    accel: 0
+  };
+  quads.accel = quads.q4 - quads.q1;  // + = speeding up bullish; − = speeding up bearish
+
   // ── Micro liquidity sweep (within single fetch → reliable) ──
   // Sweep: price wicks past the first-half range, then closes back.
   const earlyH = Math.max(...prices.slice(0, half));
@@ -147,7 +160,7 @@ function analyzeCurrentFetch(pts) {
 
   return {
     slopeFull, slopeRecent, slopeEarly, momentum,
-    rsi, bb, stoch, wr, pricePos, sweep,
+    rsi, bb, stoch, wr, pricePos, sweep, quads,
     firstPrice: prices[0],
     lastPrice:  prices[n - 1],
     n
@@ -272,6 +285,22 @@ function calcRawSignal(analysis, svgHistory, candles1m) {
     if (htf.trend === 'DOWN' && goingUp    && !analysis.sweep) htfBlock = true;
   }
 
+  // ── 10. CLOSING QUADRANT Q4 (last ~15 s of candle) ──────────
+  // Closing momentum is the most predictive feature for next candle.
+  if (analysis.quads) {
+    const q4 = analysis.quads.q4;
+    if      (q4 >  0.8) { up += 3; reasons.push('Q4 strong close UP'); }
+    else if (q4 >  0.4) { up += 2; reasons.push('Q4 UP momentum'); }
+    else if (q4 >  0.2)   up += 1;
+    if      (q4 < -0.8) { dn += 3; reasons.push('Q4 strong close DN'); }
+    else if (q4 < -0.4) { dn += 2; reasons.push('Q4 DN momentum'); }
+    else if (q4 < -0.2)   dn += 1;
+    // Acceleration bonus: candle speeding up in the same direction
+    const acc = analysis.quads.accel;
+    if (acc >  0.5 && up > dn) { up += 1; reasons.push('Close accel UP'); }
+    if (acc < -0.5 && dn > up) { dn += 1; reasons.push('Close accel DN'); }
+  }
+
   // ── Decision ─────────────────────────────────────────────────
   const total  = up + dn;
   const margin = Math.abs(up - dn);
@@ -306,7 +335,8 @@ function calcRawSignal(analysis, svgHistory, candles1m) {
     htfStrength: htf.strength,
     htfBlocked:  htfBlock,
     votes:       { up, dn, total, margin },
-    reasons:     reasons.slice(0, 7)
+    reasons:     reasons.slice(0, 8),
+    quads:       analysis.quads || null
   };
 }
 

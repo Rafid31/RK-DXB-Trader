@@ -269,6 +269,61 @@ body::before{content:'';position:fixed;inset:0;
 .card.skel{animation:shimmer 1.5s ease infinite}
 @keyframes shimmer{0%,100%{opacity:0.4}50%{opacity:0.8}}
 .skline{height:12px;background:var(--muted2);border-radius:3px;margin-bottom:8px}
+
+/* ═══ ANALYZING STATE (secsLeft > 15) ═══ */
+.card.analyzing{border-top-color:rgba(255,140,0,0.2)}
+.sigbtn-analyzing{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;
+  border-radius:9px;background:rgba(58,74,106,0.12);
+  border:1px solid rgba(58,74,106,0.25);min-width:90px}
+.sig-spinner{
+  width:14px;height:14px;flex-shrink:0;
+  border:2px solid rgba(255,140,0,0.15);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sig-analyzing-lbl{font-size:8px;font-family:var(--mono);color:var(--muted);letter-spacing:1px;line-height:1.2}
+.sig-in{font-size:14px;font-weight:800;color:var(--gold);font-family:var(--mono);line-height:1.2}
+
+/* ═══ Q4 CLOSING MOMENTUM BAR ═══ */
+.q4-wrap{
+  margin-bottom:7px;padding:5px 7px;
+  background:rgba(255,140,0,0.03);border:1px solid rgba(255,140,0,0.1);border-radius:6px}
+.q4-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.q4-lbl{font-size:8px;font-family:var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.q4-val{font-size:9px;font-family:var(--mono);font-weight:700}
+.q4-track{height:4px;background:var(--muted2);border-radius:2px;overflow:hidden;position:relative}
+.q4-fill{height:100%;border-radius:2px;position:absolute;transition:all 0.4s ease}
+.q4-fill.up{background:linear-gradient(90deg,transparent,var(--buy));left:50%}
+.q4-fill.dn{background:linear-gradient(90deg,var(--sell),transparent);right:50%}
+.q4-fill.flat{left:49%;width:2%;background:var(--muted2)}
+.q4-center{position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.2)}
+
+/* ═══ SIGNAL REVEAL BANNER (last 15 s — shown at bottom of card) ═══ */
+.signal-reveal{
+  margin:8px -16px -16px;padding:12px 16px;
+  display:flex;align-items:center;gap:12px;
+  border-radius:0 0 13px 13px}
+.signal-reveal.buy{
+  background:linear-gradient(90deg,rgba(0,230,118,0.18),rgba(0,153,60,0.12));
+  border-top:1px solid rgba(0,230,118,0.35)}
+.signal-reveal.sell{
+  background:linear-gradient(90deg,rgba(255,63,90,0.18),rgba(180,0,40,0.12));
+  border-top:1px solid rgba(255,63,90,0.35)}
+.signal-reveal.wait{
+  background:rgba(20,30,50,0.5);border-top:1px solid var(--border)}
+.reveal-lbl{
+  font-size:8px;font-family:var(--mono);color:var(--muted);
+  letter-spacing:1px;text-transform:uppercase;margin-bottom:2px}
+.reveal-dir{font-size:19px;font-weight:800;letter-spacing:1px}
+.reveal-dir.buy{color:var(--buy)}.reveal-dir.sell{color:var(--sell)}.reveal-dir.wait{color:var(--muted)}
+.reveal-conf{font-size:15px;font-weight:800;font-family:var(--mono);color:var(--gold)}
+.reveal-lock{font-size:8px;font-family:var(--mono);color:var(--muted);margin-top:1px}
+/* Glow pulse on confirmed reveal */
+.card.confirmed-buy .signal-reveal.buy{animation:buyglow 1.5s ease infinite}
+.card.confirmed-sell .signal-reveal.sell{animation:sellglow 1.5s ease infinite}
+@keyframes buyglow{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(0,230,118,0.35)}}
+@keyframes sellglow{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(255,63,90,0.35)}}
 </style>
 </head>
 <body>
@@ -290,7 +345,7 @@ body::before{content:'';position:fixed;inset:0;
     <div class="tbar"><div class="tfill" id="tfill" style="width:50%"></div></div>
     <span class="tsecs" id="tsecs">--s</span>
   </div>
-  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto" id="topNote">12 OTC · 1M+5M · Confirmed 3×</span>
+  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto" id="topNote">12 OTC · 1M+5M+15s · Signal revealed last 15s</span>
 </div>
 
 <!-- ENTRY ALERT TOP BAR (10s countdown with direction) -->
@@ -386,19 +441,31 @@ setInterval(() => {
   sel.className  = 'tsecs' + (warn5 ? ' warn5' : warn10 ? ' warn10' : '');
 
   // Per-card countdown badge + entry-now class
+  const inReveal = secs <= 15;
   if (otcData && otcData.pairs) {
     otcData.pairs.forEach(p => {
       const card = document.getElementById('c-' + p.symbol);
       if (!card) return;
-      const badge = card.querySelector('.card-cnt');
+      const badge      = card.querySelector('.card-cnt');
       const entryBadge = card.querySelector('.entry-now-badge');
-      const hasSignal = (p.signal === 'BUY' || p.signal === 'SELL') && p.isConfirmed;
+      const sigInEl    = card.querySelector('.sig-in');
+
+      // Use locked signal when in reveal window, else engine signal
+      const revealedSig  = (p.showSignal && p.lockedSignal && p.lockedSignal !== 'WAIT') ? p.lockedSignal : null;
+      const hasSignal    = !!(revealedSig);
+      const warn5reveal  = warn5 && hasSignal;
+      const warn10reveal = secs <= 15 && hasSignal;
+
+      // Update per-card "signal in Xs" countdown (analyzing phase only)
+      if (sigInEl && !inReveal) {
+        sigInEl.textContent = Math.max(0, secs - 15) + 's';
+      }
 
       if (badge) {
-        if (warn5 && hasSignal) {
+        if (warn5reveal) {
           badge.className = 'card-cnt show t5';
           badge.textContent = secs + 's ⚡';
-        } else if (warn10 && hasSignal) {
+        } else if (warn10reveal) {
           badge.className = 'card-cnt show t10';
           badge.textContent = secs + 's';
         } else {
@@ -407,14 +474,14 @@ setInterval(() => {
         }
       }
       if (entryBadge) {
-        if (warn5 && hasSignal) {
-          entryBadge.className = 'entry-now-badge show ' + p.signal.toLowerCase();
-          entryBadge.textContent = '⚡ ENTER NOW — ' + p.signal;
+        if (warn5reveal) {
+          entryBadge.className = 'entry-now-badge show ' + revealedSig.toLowerCase();
+          entryBadge.textContent = '⚡ ENTER NOW — ' + revealedSig;
         } else {
           entryBadge.className = 'entry-now-badge';
         }
       }
-      if (warn5 && hasSignal) {
+      if (warn5reveal) {
         card.classList.add('entry-now');
       } else {
         card.classList.remove('entry-now');
@@ -422,8 +489,8 @@ setInterval(() => {
     });
   }
 
-  // Top entry alert bar
-  if (warn10) {
+  // Top entry alert + final banner: only during reveal window (<=15s) with real signal
+  if (inReveal) {
     triggerEntryAlert(secs);
     triggerFinalBanner(secs);
   } else {
@@ -461,18 +528,22 @@ function hideEntryAlert() {
 
 function getBestSignal() {
   if (!otcData || !otcData.pairs) return null;
-  const confirmed = otcData.pairs.filter(p =>
-    p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65
+  // Prefer revealed locked signals; fallback to engine confirmed signals
+  const revealed = otcData.pairs.filter(p =>
+    p.showSignal && p.lockedSignal && p.lockedSignal !== 'WAIT' && p.lockedConfidence >= 60
   );
-  if (!confirmed.length) return null;
-  return confirmed.sort((a, b) => {
+  const pool = revealed.length
+    ? revealed.map(p => ({ ...p, signal: p.lockedSignal, confidence: p.lockedConfidence }))
+    : otcData.pairs.filter(p => p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65);
+  if (!pool.length) return null;
+  return pool.sort((a, b) => {
     let sa = a.confidence, sb = b.confidence;
     if ((a.signal==='BUY'&&a.slopeDir==='UP')||(a.signal==='SELL'&&a.slopeDir==='DOWN')) sa += 15;
     if ((b.signal==='BUY'&&b.slopeDir==='UP')||(b.signal==='SELL'&&b.slopeDir==='DOWN')) sb += 15;
-    if (a.htfTrend==='UP'&&a.signal==='BUY')  sa += 10;
-    if (a.htfTrend==='DOWN'&&a.signal==='SELL') sa += 10;
-    if (b.htfTrend==='UP'&&b.signal==='BUY')  sb += 10;
-    if (b.htfTrend==='DOWN'&&b.signal==='SELL') sb += 10;
+    if (a.htfTrend==='UP'&&a.signal==='BUY')    sa += 10;
+    if (a.htfTrend==='DOWN'&&a.signal==='SELL')  sa += 10;
+    if (b.htfTrend==='UP'&&b.signal==='BUY')    sb += 10;
+    if (b.htfTrend==='DOWN'&&b.signal==='SELL')  sb += 10;
     return sb - sa;
   })[0];
 }
@@ -481,9 +552,13 @@ function getBestSignal() {
 function triggerFinalBanner(secsLeft) {
   if (!otcData) return;
 
-  const confirmed = otcData.pairs.filter(p =>
-    p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65
+  // Only use revealed locked signals for the final banner
+  const revealedRaw = otcData.pairs.filter(p =>
+    p.showSignal && p.lockedSignal && p.lockedSignal !== 'WAIT' && p.lockedConfidence >= 60
   );
+  const confirmed = revealedRaw.length
+    ? revealedRaw.map(p => ({ ...p, signal: p.lockedSignal, confidence: p.lockedConfidence }))
+    : otcData.pairs.filter(p => p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65);
   if (!confirmed.length) return;
 
   const scored = confirmed.map(p => {
@@ -492,7 +567,7 @@ function triggerFinalBanner(secsLeft) {
     if (p.slopeStrong) score += 8;
     if (p.htfTrend==='UP'&&p.signal==='BUY')   score += 12;
     if (p.htfTrend==='DOWN'&&p.signal==='SELL') score += 12;
-    if (p.sweep) score += 15; // liquidity sweep = very high confidence
+    if (p.sweep) score += 15;
     return { ...p, score };
   });
 
@@ -578,6 +653,25 @@ function slopeBar(slope, slopeDir) {
   </div>`;
 }
 
+// ── Q4 closing momentum mini-bar ─────────────────────────────────
+function q4Bar(q4Slope) {
+  const v   = parseFloat(q4Slope) || 0;
+  const dir = v >  0.15 ? 'up' : v < -0.15 ? 'dn' : 'flat';
+  const w   = Math.min(50, Math.abs(v) * 38);
+  const lbl = dir==='up' ? `↑ ${v.toFixed(2)}` : dir==='dn' ? `↓ ${v.toFixed(2)}` : `→ ${v.toFixed(2)}`;
+  const col = dir==='up'?'var(--buy)':dir==='dn'?'var(--sell)':'var(--muted)';
+  return `<div class="q4-wrap">
+    <div class="q4-row">
+      <span class="q4-lbl">15s CLOSE MOM.</span>
+      <span class="q4-val" style="color:${col}">${lbl}</span>
+    </div>
+    <div class="q4-track">
+      <div class="q4-center"></div>
+      <div class="q4-fill ${dir}" style="width:${w}%"></div>
+    </div>
+  </div>`;
+}
+
 // Mini 5-min candle visualization (last 5 candles as bars)
 function htfBar(htfTrend, htfStrength, candle5mCount, signalHistory) {
   const trendCls = htfTrend === 'UP' ? 'up' : htfTrend === 'DOWN' ? 'dn' : 'flat';
@@ -607,45 +701,84 @@ function htfBar(htfTrend, htfStrength, candle5mCount, signalHistory) {
 
 // ── Render one card ──────────────────────────────────────────────
 function renderCard(p) {
-  const sig    = p.signal.toLowerCase();
-  const isConf = p.isConfirmed && p.signal !== 'WAIT';
-  const dq     = Math.min(100, Math.round((p.candleCount / 20) * 100));
+  const isAnalyzing = !p.showSignal;   // collecting phase (secsLeft > 15)
+  const showSig     = !!(p.showSignal && p.lockedSignal && p.lockedSignal !== 'WAIT');
+  const lockedSig   = (p.lockedSignal  || 'WAIT').toLowerCase();
+  const lockedConf  = p.lockedConfidence || 0;
+
+  // Card CSS class uses locked signal when in reveal window; neutral when collecting
+  const cardSigCls  = isAnalyzing ? '' : lockedSig;
+  const isConf      = showSig;
+
   const short  = p.displayName.replace(' OTC','');
   const hist   = (p.signalHistory || []).slice(-5);
   const sDir   = (p.slopeDir||'FLAT').toLowerCase() === 'up' ? 'up' :
                  (p.slopeDir||'FLAT').toLowerCase() === 'down' ? 'dn' : 'flat';
   const slopeLabel = sDir === 'up' ? '↑ UP' : sDir === 'dn' ? '↓ DN' : '→ FLAT';
+  const dq    = Math.min(100, Math.round((p.candleCount / 20) * 100));
+  const dq5m  = Math.min(100, Math.round(((p.candle5mCount||0) / 8) * 100));
 
-  // 5M HTF badge
-  const htf = p.htfTrend || 'FLAT';
-  const htfCls = htf === 'UP' ? 'htf-up' : htf === 'DOWN' ? 'htf-dn' : 'htf-flat';
-  const htfLabel = htf === 'UP' ? '5M↑' : htf === 'DOWN' ? '5M↓' : '5M→';
+  const htf    = p.htfTrend || 'FLAT';
+  const htfCls = htf==='UP'?'htf-up':htf==='DOWN'?'htf-dn':'htf-flat';
+  const htfLabel = htf==='UP'?'5M↑':htf==='DOWN'?'5M↓':'5M→';
 
-  // Sweep badge
   const sweepBadge = p.sweep
     ? `<span class="sweep-tag">🎯 ${p.sweep.replace('_',' ')}</span>` : '';
-
-  // SR zone badge
-  const srBadge = p.srZone === 'RESISTANCE'
-    ? `<span class="sr-res">⛔ RES</span>`
-    : p.srZone === 'SUPPORT'
-    ? `<span class="sr-sup">🟢 SUP</span>` : '';
-
-  // BB squeeze badge
   const squeezeBadge = p.bbSqueeze
-    ? `<span class="sweep-tag" style="background:rgba(168,85,247,0.1);color:var(--purple);border-color:rgba(168,85,247,0.3)">⚡ BB SQUEEZE</span>` : '';
+    ? `<span class="sweep-tag" style="background:rgba(168,85,247,0.1);color:var(--purple);border-color:rgba(168,85,247,0.3)">⚡ BB</span>` : '';
 
-  // Data quality based on 1M + 5M candles
-  const dq5m = Math.min(100, Math.round(((p.candle5mCount||0) / 8) * 100));
-
-  // Highlight important reason tags
-  const importantWords = ['sweep','liquidity','exhaustion','oversold','overbought','resistance','support'];
-  const reasonTags = (p.reasons||[]).slice(0,4).map(r => {
-    const isHi = importantWords.some(w => r.toLowerCase().includes(w));
+  const importantWords = ['sweep','liquidity','oversold','overbought','Q4','accel','close'];
+  const reasonTags = (p.reasons||[]).slice(0,5).map(r => {
+    const isHi = importantWords.some(w => r.toLowerCase().includes(w.toLowerCase()));
     return `<span class="tag${isHi?' hi':''}">${r}</span>`;
   }).join('');
 
-  return `<div class="card ${sig}${isConf?' confirmed-'+sig:''}" id="c-${p.symbol}">
+  // ── Signal button area ───────────────────────────────────────
+  // Collecting phase: spinner + countdown to reveal
+  // Reveal phase: show locked signal
+  const timeToReveal = isAnalyzing ? Math.max(0, p.secsLeft - 15) : 0;
+  const sigBtnHtml = isAnalyzing
+    ? `<div class="sigbtn-analyzing">
+        <div class="sig-spinner"></div>
+        <div>
+          <div class="sig-analyzing-lbl">ANALYZING</div>
+          <div class="sig-in">${timeToReveal}s</div>
+        </div>
+       </div>`
+    : `<div class="sigbtn ${lockedSig}">
+        ${lockedSig==='buy'?'▲ BUY':lockedSig==='sell'?'▼ SELL':'⏸ WAIT'}
+       </div>`;
+
+  // ── Bottom reveal banner (last 15 s only) ───────────────────
+  let revealBanner = '';
+  if (!isAnalyzing) {
+    if (showSig) {
+      revealBanner = `<div class="signal-reveal ${lockedSig}">
+        <div>
+          <div class="reveal-lbl">NEXT CANDLE PREDICTION</div>
+          <div class="reveal-dir ${lockedSig}">
+            ${lockedSig==='buy'?'▲ CALL / UP':lockedSig==='sell'?'▼ PUT / DOWN':'⏸ NO SIGNAL'}
+          </div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div class="reveal-conf">${lockedConf}%</div>
+          <div class="reveal-lock">🔒 LOCKED</div>
+        </div>
+      </div>`;
+    } else {
+      revealBanner = `<div class="signal-reveal wait">
+        <div class="reveal-lbl" style="font-size:9px">NO CLEAR SIGNAL — SKIP THIS CANDLE</div>
+      </div>`;
+    }
+  }
+
+  // Internal signal status tag (shows engine state, not displayed signal)
+  const internalConf = p.isConfirmed && p.signal !== 'WAIT';
+  const confTagLabel = isAnalyzing
+    ? (internalConf ? '🔍 READY' : 'COLLECTING')
+    : (isConf ? '✓ CONFIRMED' : 'WEAK');
+
+  return `<div class="card ${cardSigCls}${isConf?' confirmed-'+lockedSig:''}${isAnalyzing?' analyzing':''}" id="c-${p.symbol}">
     <!-- Per-card countdown badge (updated by JS timer) -->
     <div class="card-cnt" id="cnt-${p.symbol}"></div>
 
@@ -653,55 +786,52 @@ function renderCard(p) {
       <div>
         <div class="pname">${short}</div>
         <div class="ptags">
-          ${p.isCrypto ? '<span class="ctag">⚡ CRYPTO</span>' : '<span class="otag">OTC</span>'}
-          <span class="conf-tag ${isConf?'ok':'raw'}">${isConf?'✓ CONFIRMED':'BUILDING'}</span>
+          ${p.isCrypto?'<span class="ctag">⚡ CRYPTO</span>':'<span class="otag">OTC</span>'}
+          <span class="conf-tag ${(isConf||internalConf)?'ok':'raw'}">${confTagLabel}</span>
           <span class="slope-tag ${sDir}">${slopeLabel}</span>
           <span class="htf-tag ${htfCls}">${htfLabel}</span>
-          ${sweepBadge}${srBadge}${squeezeBadge}
+          ${sweepBadge}${squeezeBadge}
         </div>
       </div>
-      <div class="sigbtn ${sig}">
-        ${sig==='buy'?'▲ BUY':sig==='sell'?'▼ SELL':'⏸ WAIT'}
-      </div>
+      ${sigBtnHtml}
     </div>
 
     ${slopeBar(p.slope, p.slopeDir || 'FLAT')}
     ${htfBar(p.htfTrend, p.htfStrength, p.candle5mCount, p.signalHistory)}
+    ${q4Bar(p.q4Slope)}
 
     <div class="confrow">
       <div class="conflbl">
-        <span class="confname">CONFIDENCE</span>
-        <span class="confpct ${pC(p.confidence)}">${p.confidence}%</span>
+        <span class="confname">${isAnalyzing?'ENGINE CONFIDENCE':'LOCKED CONFIDENCE'}</span>
+        <span class="confpct ${isAnalyzing?pC(p.confidence):pC(lockedConf)}">${isAnalyzing?p.confidence+'%':lockedConf+'%'}</span>
       </div>
       <div class="conftrack">
-        <div class="conffill ${sig}" style="width:${p.confidence}%"></div>
+        <div class="conffill ${isAnalyzing?(p.signal||'wait').toLowerCase():lockedSig}"
+             style="width:${isAnalyzing?p.confidence:lockedConf}%;${isAnalyzing?'opacity:0.5':''}"></div>
       </div>
     </div>
 
     <div class="inds">
       <div class="ind"><div class="indn">RSI</div><div class="indv ${iClass(p.rsi,'rsi')}">${iV(p.rsi)}</div></div>
       <div class="ind"><div class="indn">STOCH</div><div class="indv ${iClass(p.stoch,'stoch')}">${iV(p.stoch)}</div></div>
-      <div class="ind"><div class="indn">MACD</div><div class="indv ${iClass(p.macd,'macd')}">${iV(p.macd)}</div></div>
-      <div class="ind"><div class="indn">EMA</div><div class="indv ${iClass(p.emaTrend,'ema')}">${iV(p.emaTrend)}</div></div>
-      <div class="ind"><div class="indn">CCI</div><div class="indv ${iClass(p.cci,'cci')}">${iV(p.cci)}</div></div>
       <div class="ind"><div class="indn">WR%</div><div class="indv ${iClass(p.wr,'wr')}">${iV(p.wr)}</div></div>
+      <div class="ind"><div class="indn">EMA</div><div class="indv ${iClass(p.emaTrend,'ema')}">${iV(p.emaTrend)}</div></div>
       <div class="ind"><div class="indn">BB</div><div class="indv ${p.bbPos==='ABOVE'?'dn':p.bbPos==='BELOW'?'up':'neutral'}">${iV(p.bbPos)}</div></div>
       <div class="ind" style="border-color:rgba(0,212,255,0.15);background:rgba(0,212,255,0.04)">
         <div class="indn" style="color:var(--cyan)">5M HTF</div>
         <div class="indv ${iClass(p.htfTrend,'htf')}">${iV(p.htfTrend)}</div>
       </div>
+      <div class="ind"><div class="indn">SVG pts</div><div class="indv neutral">${p.svgHistCount||0}</div></div>
+      <div class="ind"><div class="indn">SLOPE</div><div class="indv ${sDir==='up'?'up':sDir==='dn'?'dn':'neutral'}">${(p.slope||0).toFixed(2)}</div></div>
     </div>
 
     <div class="hist-row">
       <span class="hist-lbl">LAST 5:</span>
       ${hist.map(s=>`<div class="hdot ${s.toLowerCase()}"></div>`).join('')}
       ${p.rawSignal&&p.rawSignal!==p.signal?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:4px">raw:${p.rawSignal}</span>`:''}
-      ${p.streak?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:6px">${p.streak}</span>`:''}
     </div>
 
-    <div class="tags">${reasonTags}
-      ${p.pattern&&p.pattern!=='none'?`<span class="tag hi">${p.pattern}</span>`:''}
-    </div>
+    <div class="tags">${reasonTags}</div>
 
     <div class="dqrow">
       <div class="dqlbl">${p.candleCount}×1M</div>
@@ -710,6 +840,8 @@ function renderCard(p) {
       <div class="dqbar" style="flex:0.5"><div class="dqfill" style="width:${dq5m}%;background:var(--cyan)"></div></div>
       <div class="dqlbl">${dq>=100&&dq5m>=50?'Ready ✓':'Building'}</div>
     </div>
+
+    ${revealBanner}
 
     <!-- Entry Now badge (shown when <=5s and confirmed signal) -->
     <div class="entry-now-badge" id="enb-${p.symbol}"></div>
@@ -738,12 +870,19 @@ function renderOTCState(state) {
     });
   }
 
-  // Stats
-  const buys  = pairs.filter(p => p.signal === 'BUY').length;
-  const sells = pairs.filter(p => p.signal === 'SELL').length;
+  // Stats: show revealed signals if in reveal window, else engine signals
+  const anyShow = pairs.some(p => p.showSignal);
+  const buys  = anyShow
+    ? pairs.filter(p => p.showSignal && p.lockedSignal === 'BUY').length
+    : pairs.filter(p => p.signal === 'BUY').length;
+  const sells = anyShow
+    ? pairs.filter(p => p.showSignal && p.lockedSignal === 'SELL').length
+    : pairs.filter(p => p.signal === 'SELL').length;
   document.getElementById('sB').textContent = buys;
   document.getElementById('sS').textContent = sells;
-  document.getElementById('sW').textContent = pairs.filter(p => p.signal === 'WAIT').length;
+  document.getElementById('sW').textContent = anyShow
+    ? pairs.filter(p => p.showSignal && (!p.lockedSignal || p.lockedSignal === 'WAIT')).length
+    : pairs.filter(p => p.signal === 'WAIT').length;
 
   // 5M alignment count
   const htfAligned = pairs.filter(p =>
@@ -754,19 +893,22 @@ function renderOTCState(state) {
   s5mEl.textContent = htfAligned + ' aligned';
   s5mEl.style.color = htfAligned >= 2 ? 'var(--buy)' : 'var(--muted)';
 
-  // Best confirmed
-  const best = pairs
-    .filter(p => p.signal !== 'WAIT' && p.isConfirmed)
-    .sort((a,b) => b.confidence - a.confidence)[0]
+  // Best confirmed — prefer revealed locked signals, fallback to engine signals
+  const revealedPairs = pairs.filter(p => p.showSignal && p.lockedSignal && p.lockedSignal !== 'WAIT');
+  const best = revealedPairs.sort((a,b) => b.lockedConfidence - a.lockedConfidence)[0]
+    || pairs.filter(p => p.signal !== 'WAIT' && p.isConfirmed).sort((a,b) => b.confidence - a.confidence)[0]
     || pairs.filter(p => p.signal !== 'WAIT').sort((a,b) => b.confidence - a.confidence)[0];
 
   const bestEl = document.getElementById('sBest');
   if (best) {
+    const displaySig  = (best.lockedSignal && best.lockedSignal !== 'WAIT') ? best.lockedSignal : best.signal;
+    const displayConf = best.lockedConfidence || best.confidence;
     const htfNote = best.htfTrend && best.htfTrend !== 'FLAT' ? ` · 5M:${best.htfTrend}` : '';
-    bestEl.textContent = `${best.displayName.replace(' OTC','')} ${best.signal} ${best.confidence}%${best.isConfirmed?' ✓':''}${htfNote}`;
-    bestEl.style.color = best.signal === 'BUY' ? 'var(--buy)' : 'var(--sell)';
+    const revealTag = best.showSignal && best.lockedSignal ? ' 🔓' : '';
+    bestEl.textContent = `${best.displayName.replace(' OTC','')} ${displaySig} ${displayConf}%${revealTag}${htfNote}`;
+    bestEl.style.color = displaySig === 'BUY' ? 'var(--buy)' : 'var(--sell)';
   } else {
-    bestEl.textContent = 'Building candles...';
+    bestEl.textContent = 'Analyzing...';
     bestEl.style.color = 'var(--text)';
   }
 

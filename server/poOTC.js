@@ -48,6 +48,7 @@ const lastSignals     = {};
 const currentCandle   = {};
 const current5mCandle = {};
 const lastSlopes      = {};
+const lockedSignals   = {};  // per-minute display lock (only reveal last 15s)
 
 OTC_PAIRS.forEach(sym => {
   svgHistoryStore[sym]  = [];
@@ -58,6 +59,7 @@ OTC_PAIRS.forEach(sym => {
   lastSlopes[sym]       = { slope: 0, slopeDir: 'FLAT', slopeStrong: false };
   currentCandle[sym]    = null;
   current5mCandle[sym]  = null;
+  lockedSignals[sym]    = null;
 });
 
 // ── Parse SVG polyline ─────────────────────────────────────────
@@ -246,6 +248,37 @@ async function updateOTCPair(symbol) {
     slopeStrong,
     updatedAt:  new Date().toISOString()
   };
+
+  // ── Minute-based display lock ─────────────────────────────────
+  // Engine collects data all minute; signal is only REVEALED (shown)
+  // in the last 15 seconds → stable, locked prediction for next candle.
+  const nowLock      = new Date();
+  const secsLeftLock = 60 - nowLock.getUTCSeconds();
+  const currentMin   = Math.floor(Date.now() / 60000);
+  const inRevealWin  = secsLeftLock <= 15;
+
+  if (inRevealWin) {
+    // Enter reveal window: lock whatever confirmed signal we have, once per minute
+    if (!lockedSignals[symbol] || lockedSignals[symbol].minute !== currentMin) {
+      const lkSig = result.isConfirmed && result.signal !== 'WAIT'
+        ? result.signal : 'WAIT';
+      lockedSignals[symbol] = {
+        signal:     lkSig,
+        confidence: lkSig !== 'WAIT' ? result.confidence : 0,
+        minute:     currentMin,
+        reasons:    result.reasons    || [],
+        htfTrend:   result.htfTrend,
+        q4Slope:    result.quads
+                      ? parseFloat((result.quads.q4 || 0).toFixed(3))
+                      : 0
+      };
+    }
+  } else {
+    // Outside reveal window: clear stale lock from previous minute
+    if (lockedSignals[symbol] && lockedSignals[symbol].minute !== currentMin) {
+      lockedSignals[symbol] = null;
+    }
+  }
 }
 
 async function updateAllOTC() {
@@ -254,14 +287,21 @@ async function updateAllOTC() {
 
 // ── State for broadcast ────────────────────────────────────────
 function getOTCState() {
-  const now      = new Date();
-  const secsLeft = 60 - now.getUTCSeconds();
+  const now        = new Date();
+  const secsLeft   = 60 - now.getUTCSeconds();
+  const showSignal = secsLeft <= 15;                     // reveal window
+  const curMin     = Math.floor(Date.now() / 60000);
 
   return OTC_PAIRS.map(symbol => {
     const sig      = lastSignals[symbol];
     const ticks    = tickHistory[symbol];
     const lastTick = ticks[ticks.length - 1];
     const svgHist  = svgHistoryStore[symbol];
+
+    // Locked signal for display (only valid inside reveal window)
+    const locked      = lockedSignals[symbol];
+    const validLocked = showSignal && locked && locked.minute === curMin
+                          ? locked : null;
 
     // Short-term trend from tick direction
     let trend = 'FLAT';
@@ -317,6 +357,15 @@ function getOTCState() {
       } : null,
       updatedAt:  sig.updatedAt || null,
       secsLeft,
+      // ── Display gating (reveal last 15 s only) ────────────────
+      showSignal,
+      lockedSignal:     validLocked ? validLocked.signal     : null,
+      lockedConfidence: validLocked ? validLocked.confidence : null,
+      lockedReasons:    validLocked ? validLocked.reasons    : [],
+      // Q4 closing slope (last ~15 s of SVG fetch)
+      q4Slope: sig.quads
+                 ? parseFloat((sig.quads.q4 || 0).toFixed(3))
+                 : (validLocked ? validLocked.q4Slope : 0),
       isOTC:      true,
       isCrypto:   symbol.toLowerCase().includes('btc') || symbol.toLowerCase().includes('eth')
     };
