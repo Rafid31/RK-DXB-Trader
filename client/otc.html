@@ -55,14 +55,34 @@ body::before{content:'';position:fixed;inset:0;
   padding:3px 10px;border-radius:12px;background:rgba(255,140,0,0.07);
   border:1px solid var(--border);color:var(--accent)}
 .src-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite}
-.timer-wrap{display:flex;align-items:center;gap:10px;flex:1;max-width:400px}
+.timer-wrap{display:flex;align-items:center;gap:10px;flex:1;max-width:420px}
 .timer-lbl{font-size:10px;font-family:var(--mono);color:var(--muted);white-space:nowrap}
-.tbar{flex:1;height:4px;background:var(--muted2);border-radius:2px;overflow:hidden}
-.tfill{height:100%;border-radius:2px;transition:width 0.9s linear;background:var(--accent)}
-.tfill.warn{background:var(--sell)}
-.tsecs{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);min-width:32px}
-.tsecs.warn{color:var(--sell);animation:blink 0.5s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.tbar{flex:1;height:6px;background:var(--muted2);border-radius:3px;overflow:hidden}
+.tfill{height:100%;border-radius:3px;transition:width 0.9s linear;background:var(--accent)}
+.tfill.warn10{background:var(--gold)}
+.tfill.warn5{background:var(--sell)}
+.tsecs{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);min-width:36px}
+.tsecs.warn10{color:var(--gold)}
+.tsecs.warn5{color:var(--sell);animation:blink 0.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ═══ ENTRY ALERT OVERLAY (10s countdown) ═══ */
+.entry-overlay{
+  position:fixed;top:0;left:0;right:0;z-index:998;
+  pointer-events:none;
+  display:flex;justify-content:center;
+  transform:translateY(-100%);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1)}
+.entry-overlay.show{transform:translateY(0)}
+.entry-box{
+  margin-top:60px;padding:10px 28px;border-radius:0 0 16px 16px;
+  font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:1px;
+  display:flex;align-items:center;gap:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.entry-overlay.buy .entry-box{background:linear-gradient(135deg,#006627,#00c853);color:#000}
+.entry-overlay.sell .entry-box{background:linear-gradient(135deg,#7a0000,#e53935);color:#fff}
+.entry-cnt{font-size:22px;font-weight:800;min-width:40px;text-align:center}
+.entry-cnt.flash{animation:entryflash 0.3s infinite}
+@keyframes entryflash{0%,100%{opacity:1}50%{opacity:0.2}}
 
 /* ═══ FINAL SIGNAL BANNER ═══ */
 .final-wrap{
@@ -72,24 +92,27 @@ body::before{content:'';position:fixed;inset:0;
 .final-inner{
   padding:14px 24px;display:flex;align-items:center;gap:16px;
   border-top:2px solid rgba(255,255,255,0.2)}
-.final-wrap.buy .final-inner{background:linear-gradient(90deg,#00c853,#00e676)}
-.final-wrap.sell .final-inner{background:linear-gradient(90deg,#c62828,#ff3f5a)}
+.final-wrap.buy .final-inner{background:linear-gradient(90deg,#00a040,#00e676)}
+.final-wrap.sell .final-inner{background:linear-gradient(90deg,#9a0000,#ff3f5a)}
 .final-wrap.wait .final-inner{background:rgba(20,30,50,0.97);border-top-color:var(--border)}
-.final-icon{font-size:32px;line-height:1}
+.final-icon{font-size:36px;line-height:1}
 .final-main{flex:1}
-.final-dir{font-size:24px;font-weight:800;letter-spacing:1px;line-height:1}
+.final-dir{font-size:26px;font-weight:800;letter-spacing:1px;line-height:1}
 .final-wrap.buy .final-dir{color:#000}
 .final-wrap.sell .final-dir{color:#fff}
-.final-wrap.wait .final-dir{color:var(--muted)}
-.final-detail{font-size:11px;font-family:var(--mono);margin-top:3px;opacity:0.75}
-.final-wrap.buy .final-detail{color:rgba(0,0,0,0.7)}
-.final-wrap.sell .final-detail,.final-wrap.wait .final-detail{color:rgba(255,255,255,0.6)}
+.final-cnt{font-size:18px;font-weight:800;font-family:var(--mono);padding:4px 12px;
+  border-radius:8px;background:rgba(0,0,0,0.25);min-width:52px;text-align:center}
+.final-wrap.buy .final-cnt{color:#000}
+.final-wrap.sell .final-cnt{color:#fff}
+.final-detail{font-size:11px;font-family:var(--mono);margin-top:4px;opacity:0.8}
+.final-wrap.buy .final-detail{color:rgba(0,0,0,0.75)}
+.final-wrap.sell .final-detail,.final-wrap.wait .final-detail{color:rgba(255,255,255,0.7)}
 .final-pairs{display:flex;flex-wrap:wrap;gap:6px}
 .fp{padding:5px 10px;border-radius:7px;font-size:11px;font-weight:800;
-  background:rgba(0,0,0,0.2);color:#fff;font-family:var(--font)}
+  background:rgba(0,0,0,0.2);color:#fff;font-family:var(--font);text-align:center}
 .final-dismiss{font-size:10px;font-family:var(--mono);color:rgba(255,255,255,0.5);
   cursor:pointer;padding:5px 10px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;
-  white-space:nowrap}
+  white-space:nowrap;pointer-events:all}
 
 /* STATS */
 .stats{position:relative;z-index:1;margin:12px 20px 0;padding:10px 16px;
@@ -108,7 +131,7 @@ body::before{content:'';position:fixed;inset:0;
   display:flex;align-items:center;justify-content:space-between}
 .gtitle{font-size:10px;font-family:var(--mono);color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
 .gupdated{font-size:10px;font-family:var(--mono);color:var(--muted)}
-.grid{position:relative;z-index:1;padding:0 20px 110px;
+.grid{position:relative;z-index:1;padding:0 20px 130px;
   display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.grid{grid-template-columns:1fr}}
@@ -117,10 +140,22 @@ body::before{content:'';position:fixed;inset:0;
 .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
   padding:16px;position:relative;overflow:hidden;
   border-top:2px solid rgba(255,140,0,0.15);transition:border-color 0.3s,box-shadow 0.3s}
-.card.buy{border-top-color:var(--buy);background:linear-gradient(160deg,rgba(0,230,118,0.05),var(--panel) 50%)}
-.card.sell{border-top-color:var(--sell);background:linear-gradient(160deg,rgba(255,63,90,0.05),var(--panel) 50%)}
-.card.confirmed-buy{border-color:rgba(0,230,118,0.45);box-shadow:0 0 18px rgba(0,230,118,0.1)}
-.card.confirmed-sell{border-color:rgba(255,63,90,0.45);box-shadow:0 0 18px rgba(255,63,90,0.1)}
+.card.buy{border-top-color:var(--buy);background:linear-gradient(160deg,rgba(0,230,118,0.05),var(--panel) 55%)}
+.card.sell{border-top-color:var(--sell);background:linear-gradient(160deg,rgba(255,63,90,0.05),var(--panel) 55%)}
+.card.confirmed-buy{border-color:rgba(0,230,118,0.45);box-shadow:0 0 22px rgba(0,230,118,0.12)}
+.card.confirmed-sell{border-color:rgba(255,63,90,0.45);box-shadow:0 0 22px rgba(255,63,90,0.12)}
+/* ENTRY flash on card when <=5s */
+.card.entry-now{animation:cardpulse 0.6s infinite}
+@keyframes cardpulse{0%,100%{box-shadow:0 0 0 rgba(255,208,96,0)}50%{box-shadow:0 0 28px rgba(255,208,96,0.5)}}
+
+/* Card countdown badge */
+.card-cnt{
+  position:absolute;top:10px;right:10px;
+  font-family:var(--mono);font-size:10px;font-weight:700;
+  padding:2px 8px;border-radius:6px;display:none}
+.card-cnt.show{display:block}
+.card-cnt.t10{background:rgba(255,208,96,0.15);color:var(--gold);border:1px solid rgba(255,208,96,0.3)}
+.card-cnt.t5{background:rgba(255,63,90,0.2);color:var(--sell);border:1px solid rgba(255,63,90,0.4);animation:blink 0.5s infinite}
 
 .crow{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
 .pname{font-size:18px;font-weight:800;letter-spacing:-0.3px}
@@ -130,12 +165,24 @@ body::before{content:'';position:fixed;inset:0;
 .ctag{font-size:8px;font-family:var(--mono);padding:2px 6px;border-radius:3px;
   background:rgba(168,85,247,0.08);color:var(--purple);border:1px solid rgba(168,85,247,0.25);letter-spacing:1px}
 .conf-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px}
-.conf-tag.ok{background:rgba(255,208,96,0.1);color:var(--gold);border:1px solid rgba(255,208,96,0.3)}
+.conf-tag.ok{background:rgba(255,208,96,0.12);color:var(--gold);border:1px solid rgba(255,208,96,0.35)}
 .conf-tag.raw{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
 .slope-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px}
 .slope-tag.up{background:rgba(0,230,118,0.08);color:var(--buy);border:1px solid rgba(0,230,118,0.2)}
 .slope-tag.dn{background:rgba(255,63,90,0.08);color:var(--sell);border:1px solid rgba(255,63,90,0.2)}
 .slope-tag.flat{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
+/* 5M HTF tag */
+.htf-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px;font-weight:700}
+.htf-tag.htf-up{background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3)}
+.htf-tag.htf-dn{background:rgba(168,85,247,0.1);color:var(--purple);border:1px solid rgba(168,85,247,0.3)}
+.htf-tag.htf-flat{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
+/* Sweep / SR badge */
+.sweep-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px;
+  background:rgba(255,208,96,0.12);color:var(--gold);border:1px solid rgba(255,208,96,0.4)}
+.sr-res{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px;
+  background:rgba(255,63,90,0.1);color:var(--sell);border:1px solid rgba(255,63,90,0.3)}
+.sr-sup{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px;
+  background:rgba(0,230,118,0.08);color:var(--buy);border:1px solid rgba(0,230,118,0.25)}
 
 .sigbtn{padding:8px 14px;border-radius:9px;font-family:var(--font);
   font-size:13px;font-weight:800;letter-spacing:1px;border:none;cursor:default}
@@ -146,7 +193,7 @@ body::before{content:'';position:fixed;inset:0;
 .sigbtn.wait{background:rgba(58,74,106,0.2);color:var(--muted);
   border:1px solid rgba(58,74,106,0.3);font-size:11px}
 
-/* SLOPE BAR — shows momentum direction visually */
+/* SLOPE BAR */
 .slope-bar-wrap{margin-bottom:8px}
 .slope-bar-lbl{display:flex;justify-content:space-between;margin-bottom:3px}
 .slope-bar-name{font-size:9px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px}
@@ -158,7 +205,21 @@ body::before{content:'';position:fixed;inset:0;
 .slope-fill.flat{background:var(--muted2);left:50%;width:2px}
 .slope-center{position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.15)}
 
-.confrow{margin-bottom:10px}
+/* 5M CANDLE BAR */
+.htf-bar-wrap{margin-bottom:8px;padding:6px 8px;
+  background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.1);border-radius:7px}
+.htf-bar-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.htf-bar-lbl{font-size:9px;font-family:var(--mono);color:var(--cyan);text-transform:uppercase;letter-spacing:1px}
+.htf-bar-val{font-size:9px;font-family:var(--mono);font-weight:700}
+.htf-bar-val.up{color:var(--buy)}.htf-bar-val.dn{color:var(--sell)}.htf-bar-val.flat{color:var(--muted)}
+.htf-candles{display:flex;gap:3px;align-items:flex-end;height:20px}
+.htf-c{width:8px;border-radius:2px;min-height:4px;transition:height 0.3s}
+.htf-c.bull{background:var(--buy)}
+.htf-c.bear{background:var(--sell)}
+.htf-c.flat{background:var(--muted2)}
+
+/* CONFIDENCE */
+.confrow{margin-bottom:8px}
 .conflbl{display:flex;justify-content:space-between;margin-bottom:4px}
 .confname{font-size:9px;font-family:var(--mono);color:var(--muted);letter-spacing:1px;text-transform:uppercase}
 .confpct{font-size:11px;font-family:var(--mono);font-weight:700}
@@ -169,12 +230,14 @@ body::before{content:'';position:fixed;inset:0;
 .conffill.sell{background:linear-gradient(90deg,#cc0033,var(--sell))}
 .conffill.wait{background:var(--muted2)}
 
-.inds{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
-.ind{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:6px 5px;text-align:center}
-.indn{font-size:8px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}
-.indv{font-size:11px;font-family:var(--mono);font-weight:700}
+/* INDICATORS — 2 rows of 4 */
+.inds{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px}
+.ind{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:5px 4px;text-align:center}
+.indn{font-size:7px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}
+.indv{font-size:10px;font-family:var(--mono);font-weight:700}
 .indv.up,.indv.bullish{color:var(--buy)}.indv.dn,.indv.bearish{color:var(--sell)}.indv.neutral{color:var(--muted)}
 
+/* SIGNAL HISTORY */
 .hist-row{display:flex;align-items:center;gap:4px;margin-bottom:7px}
 .hist-lbl{font-size:9px;font-family:var(--mono);color:var(--muted);margin-right:2px}
 .hdot{width:10px;height:10px;border-radius:50%;border:1px solid}
@@ -182,14 +245,26 @@ body::before{content:'';position:fixed;inset:0;
 .hdot.sell{background:rgba(255,63,90,0.3);border-color:var(--sell)}
 .hdot.wait{background:rgba(58,74,106,0.15);border-color:var(--muted)}
 
-.tags{display:flex;flex-wrap:wrap;gap:4px;min-height:16px}
+/* REASON TAGS */
+.tags{display:flex;flex-wrap:wrap;gap:4px;min-height:16px;margin-bottom:6px}
 .tag{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:4px;
   background:rgba(255,255,255,0.03);border:1px solid var(--border);color:var(--muted)}
+.tag.hi{background:rgba(255,208,96,0.06);color:var(--gold);border-color:rgba(255,208,96,0.2)}
 
-.dqrow{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
+/* DATA QUALITY */
+.dqrow{display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px solid var(--border)}
 .dqbar{flex:1;height:2px;background:var(--muted2);border-radius:1px;overflow:hidden}
 .dqfill{height:100%;background:var(--accent);border-radius:1px}
 .dqlbl{font-size:9px;font-family:var(--mono);color:var(--muted)}
+
+/* ENTRY NOW overlay inside card */
+.entry-now-badge{
+  display:none;position:absolute;bottom:0;left:0;right:0;
+  padding:6px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;
+  letter-spacing:2px;border-radius:0 0 13px 13px}
+.entry-now-badge.show{display:block}
+.entry-now-badge.buy{background:rgba(0,230,118,0.18);color:var(--buy)}
+.entry-now-badge.sell{background:rgba(255,63,90,0.18);color:var(--sell)}
 
 .card.skel{animation:shimmer 1.5s ease infinite}
 @keyframes shimmer{0%,100%{opacity:0.4}50%{opacity:0.8}}
@@ -215,7 +290,16 @@ body::before{content:'';position:fixed;inset:0;
     <div class="tbar"><div class="tfill" id="tfill" style="width:50%"></div></div>
     <span class="tsecs" id="tsecs">--s</span>
   </div>
-  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto">12 OTC pairs · Confirmed 3× · No flip-flop</span>
+  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto" id="topNote">12 OTC · 1M+5M · Confirmed 3×</span>
+</div>
+
+<!-- ENTRY ALERT TOP BAR (10s countdown with direction) -->
+<div class="entry-overlay" id="entryOverlay">
+  <div class="entry-box">
+    <span id="entryDir" style="font-size:15px">⚡ ENTRY</span>
+    <span id="entryCnt" class="entry-cnt">--</span>
+    <span id="entryPair" style="font-size:11px;opacity:0.8">—</span>
+  </div>
 </div>
 
 <div class="stats">
@@ -225,17 +309,19 @@ body::before{content:'';position:fixed;inset:0;
   <div class="sdiv"></div>
   <div class="stat"><div class="slbl">WAIT</div><div class="sval n" id="sW">—</div></div>
   <div class="sdiv"></div>
+  <div class="stat"><div class="slbl">5M Align</div><div class="sval n" id="s5m" style="font-size:14px">—</div></div>
+  <div class="sdiv"></div>
   <div class="stat"><div class="slbl">Best Confirmed</div><div class="sval n" id="sBest" style="font-size:13px">Building...</div></div>
-  <div class="note">✅ Signal = 3× same in a row</div>
+  <div class="note">✅ Signal = 3× same + 5M aligned</div>
 </div>
 
 <div class="ghdr">
-  <span class="gtitle">// OTC SIGNALS — POCKET OPTION · 12 PAIRS</span>
+  <span class="gtitle">// OTC SIGNALS — POCKET OPTION · 12 PAIRS · 1M+5M HTF</span>
   <span class="gupdated" id="upd">—</span>
 </div>
 <div class="grid" id="grid"></div>
 
-<!-- FINAL SIGNAL BANNER -->
+<!-- FINAL SIGNAL BANNER (bottom) -->
 <div class="final-wrap" id="finalWrap">
   <div class="final-inner">
     <div class="final-icon" id="fIcon">⚡</div>
@@ -243,14 +329,15 @@ body::before{content:'';position:fixed;inset:0;
       <div class="final-dir" id="fDir">—</div>
       <div class="final-detail" id="fDetail">—</div>
     </div>
+    <div class="final-cnt" id="fCnt">--s</div>
     <div class="final-pairs" id="fPairs"></div>
-    <span class="final-dismiss" onclick="dismissBanner()">✕</span>
+    <span class="final-dismiss" onclick="dismissBanner()">✕ DISMISS</span>
   </div>
 </div>
 
 <script>
 'use strict';
-// ── Auth ────────────────────────────────────────────────────
+// ── Auth ────────────────────────────────────────────────────────
 const EMAIL = localStorage.getItem('rk_auth_email');
 let TOKEN = localStorage.getItem('rk_auth_token');
 if (!EMAIL || !TOKEN) { location.href = 'index.html'; }
@@ -259,7 +346,7 @@ async function logout() {
   try {
     await fetch('https://rk-dxb-trader.onrender.com/api/auth/logout', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({email:EMAIL})
+      body: JSON.stringify({ email: EMAIL })
     });
   } catch(e) {}
   localStorage.removeItem('rk_auth_email');
@@ -267,13 +354,14 @@ async function logout() {
   location.href = 'index.html';
 }
 
-// ── State ────────────────────────────────────────────────────
-let otcData = null;   // latest OTC state from server
-let gridInit = false; // first render done?
+// ── State ────────────────────────────────────────────────────────
+let otcData = null;
+let gridInit = false;
 let bannerDismissed = false;
 let lastBannerSig = '';
+let currentSecsLeft = 60;
 
-// ── UTC Clock ────────────────────────────────────────────────
+// ── UTC Clock ───────────────────────────────────────────────────
 function pad(n){ return String(n).padStart(2,'0'); }
 setInterval(() => {
   const n = new Date();
@@ -281,93 +369,177 @@ setInterval(() => {
     `UTC ${pad(n.getUTCHours())}:${pad(n.getUTCMinutes())}:${pad(n.getUTCSeconds())}`;
 }, 1000);
 
-// ── Timer + Final Banner trigger ─────────────────────────────
+// ── Candle Countdown + Entry Alert ─────────────────────────────
 setInterval(() => {
   const secs = 60 - new Date().getUTCSeconds();
-  const pct  = (secs / 60) * 100;
+  currentSecsLeft = secs;
+  const pct = (secs / 60) * 100;
+
   const fill = document.getElementById('tfill');
   const sel  = document.getElementById('tsecs');
   fill.style.width = pct + '%';
   sel.textContent  = secs + 's';
-  const warn = secs <= 10;
-  fill.className = 'tfill' + (warn ? ' warn' : '');
-  sel.className  = 'tsecs' + (warn ? ' warn' : '');
 
-  if (warn) {
+  const warn5  = secs <= 5;
+  const warn10 = secs <= 10;
+  fill.className = 'tfill' + (warn5 ? ' warn5' : warn10 ? ' warn10' : '');
+  sel.className  = 'tsecs' + (warn5 ? ' warn5' : warn10 ? ' warn10' : '');
+
+  // Per-card countdown badge + entry-now class
+  if (otcData && otcData.pairs) {
+    otcData.pairs.forEach(p => {
+      const card = document.getElementById('c-' + p.symbol);
+      if (!card) return;
+      const badge = card.querySelector('.card-cnt');
+      const entryBadge = card.querySelector('.entry-now-badge');
+      const hasSignal = (p.signal === 'BUY' || p.signal === 'SELL') && p.isConfirmed;
+
+      if (badge) {
+        if (warn5 && hasSignal) {
+          badge.className = 'card-cnt show t5';
+          badge.textContent = secs + 's ⚡';
+        } else if (warn10 && hasSignal) {
+          badge.className = 'card-cnt show t10';
+          badge.textContent = secs + 's';
+        } else {
+          badge.className = 'card-cnt';
+          badge.textContent = '';
+        }
+      }
+      if (entryBadge) {
+        if (warn5 && hasSignal) {
+          entryBadge.className = 'entry-now-badge show ' + p.signal.toLowerCase();
+          entryBadge.textContent = '⚡ ENTER NOW — ' + p.signal;
+        } else {
+          entryBadge.className = 'entry-now-badge';
+        }
+      }
+      if (warn5 && hasSignal) {
+        card.classList.add('entry-now');
+      } else {
+        card.classList.remove('entry-now');
+      }
+    });
+  }
+
+  // Top entry alert bar
+  if (warn10) {
+    triggerEntryAlert(secs);
     triggerFinalBanner(secs);
   } else {
+    hideEntryAlert();
     if (!bannerDismissed) hideBanner();
     bannerDismissed = false;
   }
 }, 1000);
 
-// ── Final Banner ─────────────────────────────────────────────
+// ── Entry Alert (top bar) ───────────────────────────────────────
+let lastEntryKey = '';
+function triggerEntryAlert(secsLeft) {
+  if (!otcData) return;
+  const best = getBestSignal();
+  if (!best) { hideEntryAlert(); return; }
+
+  const key = best.signal + '-' + best.symbol;
+  const el = document.getElementById('entryOverlay');
+  const cntEl = document.getElementById('entryCnt');
+
+  el.className = 'entry-overlay show ' + best.signal.toLowerCase();
+  document.getElementById('entryDir').textContent =
+    best.signal === 'BUY' ? '▲ CALL — GO UP' : '▼ PUT — GO DOWN';
+  cntEl.textContent = secsLeft + 's';
+  cntEl.className = 'entry-cnt' + (secsLeft <= 5 ? ' flash' : '');
+  document.getElementById('entryPair').textContent =
+    best.displayName.replace(' OTC','') + ' · ' + best.confidence + '% · 5M:' + (best.htfTrend||'?');
+
+  // Update banner countdown too
+  document.getElementById('fCnt').textContent = secsLeft + 's';
+}
+function hideEntryAlert() {
+  document.getElementById('entryOverlay').className = 'entry-overlay';
+}
+
+function getBestSignal() {
+  if (!otcData || !otcData.pairs) return null;
+  const confirmed = otcData.pairs.filter(p =>
+    p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65
+  );
+  if (!confirmed.length) return null;
+  return confirmed.sort((a, b) => {
+    let sa = a.confidence, sb = b.confidence;
+    if ((a.signal==='BUY'&&a.slopeDir==='UP')||(a.signal==='SELL'&&a.slopeDir==='DOWN')) sa += 15;
+    if ((b.signal==='BUY'&&b.slopeDir==='UP')||(b.signal==='SELL'&&b.slopeDir==='DOWN')) sb += 15;
+    if (a.htfTrend==='UP'&&a.signal==='BUY')  sa += 10;
+    if (a.htfTrend==='DOWN'&&a.signal==='SELL') sa += 10;
+    if (b.htfTrend==='UP'&&b.signal==='BUY')  sb += 10;
+    if (b.htfTrend==='DOWN'&&b.signal==='SELL') sb += 10;
+    return sb - sa;
+  })[0];
+}
+
+// ── Final Banner ────────────────────────────────────────────────
 function triggerFinalBanner(secsLeft) {
   if (!otcData) return;
-  const pairs = otcData.pairs;
 
-  // ── THE ALGORITHM: How we decide final signal ────────────
-  // Priority 1: CONFIRMED signals (3× same in a row) → most reliable
-  // Priority 2: Strong slope (linear regression) aligning with signal
-  // Priority 3: Majority direction if multiple pairs agree
-  // ONLY show banner if we have strong conviction
+  const confirmed = otcData.pairs.filter(p =>
+    p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65
+  );
+  if (!confirmed.length) return;
 
-  const confirmed = pairs.filter(p => p.isConfirmed && p.signal !== 'WAIT' && p.confidence >= 65);
-  
-  // Score each confirmed signal with slope alignment bonus
   const scored = confirmed.map(p => {
     let score = p.confidence;
-    // Slope aligns with signal = +15 bonus
-    if ((p.signal === 'BUY'  && p.slopeDir === 'UP')   ||
-        (p.signal === 'SELL' && p.slopeDir === 'DOWN')) {
-      score += 15;
-    }
-    // Strong slope = +10 bonus
-    if (p.slopeStrong) score += 10;
+    if ((p.signal==='BUY'&&p.slopeDir==='UP')||(p.signal==='SELL'&&p.slopeDir==='DOWN')) score += 15;
+    if (p.slopeStrong) score += 8;
+    if (p.htfTrend==='UP'&&p.signal==='BUY')   score += 12;
+    if (p.htfTrend==='DOWN'&&p.signal==='SELL') score += 12;
+    if (p.sweep) score += 15; // liquidity sweep = very high confidence
     return { ...p, score };
   });
 
-  if (scored.length === 0) return; // No confirmed signal — no banner
-
-  // Find dominant direction
   const buys  = scored.filter(p => p.signal === 'BUY');
   const sells = scored.filter(p => p.signal === 'SELL');
-  
-  // Need at least 1 confirmed pair
   const dominant = buys.length >= sells.length ? 'BUY' : 'SELL';
-  const domPairs = (dominant === 'BUY' ? buys : sells)
-    .sort((a,b) => b.score - a.score);
+  const domPairs = (dominant === 'BUY' ? buys : sells).sort((a,b) => b.score - a.score);
+  if (!domPairs.length) return;
 
-  if (domPairs.length === 0) return;
-
-  const best  = domPairs[0];
-  const sigKey = dominant + '-' + secsLeft;
-  if (sigKey === lastBannerSig) return; // Don't re-show same second
+  const best = domPairs[0];
+  const sigKey = dominant + '-' + Math.ceil(secsLeft / 2); // update every 2s
+  if (sigKey === lastBannerSig) {
+    // Just update countdown without re-rendering
+    document.getElementById('fCnt').textContent = secsLeft + 's';
+    return;
+  }
   lastBannerSig = sigKey;
 
-  // Show banner
   const wrap = document.getElementById('finalWrap');
   wrap.className = 'final-wrap show ' + dominant.toLowerCase();
-  
   document.getElementById('fIcon').textContent = dominant === 'BUY' ? '▲' : '▼';
   document.getElementById('fDir').textContent  = dominant === 'BUY' ? 'GO UP — CALL' : 'GO DOWN — PUT';
+  document.getElementById('fCnt').textContent  = secsLeft + 's';
+
+  const htfLine = best.htfTrend && best.htfTrend !== 'FLAT'
+    ? ` · 5M:${best.htfTrend}` : '';
+  const sweepLine = best.sweep ? ' · 🎯SWEEP' : '';
   document.getElementById('fDetail').textContent =
-    `${secsLeft}s left · ${domPairs.length} confirmed · Best: ${best.displayName.replace(' OTC','')} ${best.score}pts`;
+    `${domPairs.length} confirmed${htfLine}${sweepLine} · Best: ${best.displayName.replace(' OTC','')} ${best.score}pts`;
 
   document.getElementById('fPairs').innerHTML = domPairs.slice(0, 4).map(p =>
-    `<div class="fp">${p.displayName.replace(' OTC','')}<br><small style="opacity:0.7">${p.signal} ${p.confidence}%</small></div>`
+    `<div class="fp">${p.displayName.replace(' OTC','')}<br>
+     <small style="opacity:0.7">${p.signal} ${p.confidence}%${p.htfTrend&&p.htfTrend!=='FLAT'?' 5M:'+p.htfTrend:''}</small></div>`
   ).join('');
 }
 
 function hideBanner() {
   document.getElementById('finalWrap').className = 'final-wrap';
+  document.getElementById('fCnt').textContent = '--s';
 }
 function dismissBanner() {
   bannerDismissed = true;
   hideBanner();
+  hideEntryAlert();
 }
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────
 function iClass(v, t) {
   if (v === null || v === undefined) return 'neutral';
   if (t === 'macd' || t === 'ema') {
@@ -379,24 +551,25 @@ function iClass(v, t) {
   if (t === 'rsi')   return v >= 65 ? 'dn' : v <= 35 ? 'up' : 'neutral';
   if (t === 'stoch') return v >= 80 ? 'dn' : v <= 20 ? 'up' : 'neutral';
   if (t === 'wr')    return v >= -20 ? 'dn' : v <= -80 ? 'up' : 'neutral';
+  if (t === 'cci')   return v >= 100 ? 'dn' : v <= -100 ? 'up' : 'neutral';
+  if (t === 'htf')   return v === 'UP' ? 'up' : v === 'DOWN' ? 'dn' : 'neutral';
   return 'neutral';
 }
 function iV(v) { return (v === null || v === undefined) ? '—' : String(v); }
 function pC(c) { return c >= 80 ? 'hi' : c >= 65 ? 'md' : 'lo'; }
 
 function slopeBar(slope, slopeDir) {
-  // Slope range -5 to +5 mapped to 0-100%
-  const pct = Math.min(50, Math.abs(parseFloat(slope||0)) * 10);
+  const pct  = Math.min(50, Math.abs(parseFloat(slope||0)) * 10);
   const col  = slopeDir === 'UP' ? 'up' : slopeDir === 'DOWN' ? 'dn' : 'flat';
   const style = slopeDir === 'UP'
     ? `right:0;width:${pct}%`
-    : slopeDir === 'DOWN'
-    ? `left:0;width:${pct}%`
+    : slopeDir === 'DOWN' ? `left:0;width:${pct}%`
     : 'left:50%;width:2px';
+  const sVal = typeof slope === 'number' ? slope.toFixed(2) : (slope||0);
   return `<div class="slope-bar-wrap">
     <div class="slope-bar-lbl">
-      <span class="slope-bar-name">MOMENTUM SLOPE</span>
-      <span class="slope-bar-val" style="color:var(--${slopeDir==='UP'?'buy':slopeDir==='DOWN'?'sell':'muted'})">${slopeDir} (${(slope||0).toFixed ? (slope||0).toFixed(2) : slope})</span>
+      <span class="slope-bar-name">1M SLOPE</span>
+      <span class="slope-bar-val" style="color:var(--${slopeDir==='UP'?'buy':slopeDir==='DOWN'?'sell':'muted'})">${slopeDir} (${sVal})</span>
     </div>
     <div class="slope-track">
       <div class="slope-fill ${col}" style="${style}"></div>
@@ -405,18 +578,77 @@ function slopeBar(slope, slopeDir) {
   </div>`;
 }
 
-// ── Render one card ──────────────────────────────────────────
+// Mini 5-min candle visualization (last 5 candles as bars)
+function htfBar(htfTrend, htfStrength, candle5mCount, signalHistory) {
+  const trendCls = htfTrend === 'UP' ? 'up' : htfTrend === 'DOWN' ? 'dn' : 'flat';
+  const trendTxt = htfTrend === 'UP' ? '↑ BULL' : htfTrend === 'DOWN' ? '↓ BEAR' : '→ FLAT';
+  const label    = htfTrend !== 'FLAT' ? `5M TREND: ${trendTxt} (str:${htfStrength||0})` : '5M TREND: FLAT — no filter';
+
+  // Build mini candle dots from signal history to represent 5M direction
+  // Use last 5 items of signalHistory as mini bar heights
+  const hist = (signalHistory || []).slice(-5);
+  const bars = hist.map((s, i) => {
+    const h = 8 + i * 3; // increasing height to show time progression
+    const cls = s === 'BUY' ? 'bull' : s === 'SELL' ? 'bear' : 'flat';
+    return `<div class="htf-c ${cls}" style="height:${h}px"></div>`;
+  }).join('');
+
+  return `<div class="htf-bar-wrap">
+    <div class="htf-bar-row">
+      <span class="htf-bar-lbl">5M HTF</span>
+      <span class="htf-bar-val ${trendCls}">${trendTxt}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="htf-candles">${bars}</div>
+      <span style="font-size:9px;font-family:var(--mono);color:var(--muted)">${candle5mCount||0} 5M candles</span>
+    </div>
+  </div>`;
+}
+
+// ── Render one card ──────────────────────────────────────────────
 function renderCard(p) {
-  const sig   = p.signal.toLowerCase();
+  const sig    = p.signal.toLowerCase();
   const isConf = p.isConfirmed && p.signal !== 'WAIT';
-  const dq    = Math.min(100, Math.round((p.candleCount / 20) * 100));
-  const short = p.displayName.replace(' OTC','');
-  const hist  = (p.signalHistory || []).slice(-5);
-  const sDir  = (p.slopeDir || 'FLAT').toLowerCase() === 'up' ? 'up' :
-                (p.slopeDir || 'FLAT').toLowerCase() === 'down' ? 'dn' : 'flat';
-  const slopeLabel = sDir === 'up' ? '↑ UP' : sDir === 'dn' ? '↓ DOWN' : '→ FLAT';
+  const dq     = Math.min(100, Math.round((p.candleCount / 20) * 100));
+  const short  = p.displayName.replace(' OTC','');
+  const hist   = (p.signalHistory || []).slice(-5);
+  const sDir   = (p.slopeDir||'FLAT').toLowerCase() === 'up' ? 'up' :
+                 (p.slopeDir||'FLAT').toLowerCase() === 'down' ? 'dn' : 'flat';
+  const slopeLabel = sDir === 'up' ? '↑ UP' : sDir === 'dn' ? '↓ DN' : '→ FLAT';
+
+  // 5M HTF badge
+  const htf = p.htfTrend || 'FLAT';
+  const htfCls = htf === 'UP' ? 'htf-up' : htf === 'DOWN' ? 'htf-dn' : 'htf-flat';
+  const htfLabel = htf === 'UP' ? '5M↑' : htf === 'DOWN' ? '5M↓' : '5M→';
+
+  // Sweep badge
+  const sweepBadge = p.sweep
+    ? `<span class="sweep-tag">🎯 ${p.sweep.replace('_',' ')}</span>` : '';
+
+  // SR zone badge
+  const srBadge = p.srZone === 'RESISTANCE'
+    ? `<span class="sr-res">⛔ RES</span>`
+    : p.srZone === 'SUPPORT'
+    ? `<span class="sr-sup">🟢 SUP</span>` : '';
+
+  // BB squeeze badge
+  const squeezeBadge = p.bbSqueeze
+    ? `<span class="sweep-tag" style="background:rgba(168,85,247,0.1);color:var(--purple);border-color:rgba(168,85,247,0.3)">⚡ BB SQUEEZE</span>` : '';
+
+  // Data quality based on 1M + 5M candles
+  const dq5m = Math.min(100, Math.round(((p.candle5mCount||0) / 8) * 100));
+
+  // Highlight important reason tags
+  const importantWords = ['sweep','liquidity','exhaustion','oversold','overbought','resistance','support'];
+  const reasonTags = (p.reasons||[]).slice(0,4).map(r => {
+    const isHi = importantWords.some(w => r.toLowerCase().includes(w));
+    return `<span class="tag${isHi?' hi':''}">${r}</span>`;
+  }).join('');
 
   return `<div class="card ${sig}${isConf?' confirmed-'+sig:''}" id="c-${p.symbol}">
+    <!-- Per-card countdown badge (updated by JS timer) -->
+    <div class="card-cnt" id="cnt-${p.symbol}"></div>
+
     <div class="crow">
       <div>
         <div class="pname">${short}</div>
@@ -424,6 +656,8 @@ function renderCard(p) {
           ${p.isCrypto ? '<span class="ctag">⚡ CRYPTO</span>' : '<span class="otag">OTC</span>'}
           <span class="conf-tag ${isConf?'ok':'raw'}">${isConf?'✓ CONFIRMED':'BUILDING'}</span>
           <span class="slope-tag ${sDir}">${slopeLabel}</span>
+          <span class="htf-tag ${htfCls}">${htfLabel}</span>
+          ${sweepBadge}${srBadge}${squeezeBadge}
         </div>
       </div>
       <div class="sigbtn ${sig}">
@@ -432,6 +666,7 @@ function renderCard(p) {
     </div>
 
     ${slopeBar(p.slope, p.slopeDir || 'FLAT')}
+    ${htfBar(p.htfTrend, p.htfStrength, p.candle5mCount, p.signalHistory)}
 
     <div class="confrow">
       <div class="conflbl">
@@ -448,28 +683,40 @@ function renderCard(p) {
       <div class="ind"><div class="indn">STOCH</div><div class="indv ${iClass(p.stoch,'stoch')}">${iV(p.stoch)}</div></div>
       <div class="ind"><div class="indn">MACD</div><div class="indv ${iClass(p.macd,'macd')}">${iV(p.macd)}</div></div>
       <div class="ind"><div class="indn">EMA</div><div class="indv ${iClass(p.emaTrend,'ema')}">${iV(p.emaTrend)}</div></div>
+      <div class="ind"><div class="indn">CCI</div><div class="indv ${iClass(p.cci,'cci')}">${iV(p.cci)}</div></div>
+      <div class="ind"><div class="indn">WR%</div><div class="indv ${iClass(p.wr,'wr')}">${iV(p.wr)}</div></div>
+      <div class="ind"><div class="indn">BB</div><div class="indv ${p.bbPos==='ABOVE'?'dn':p.bbPos==='BELOW'?'up':'neutral'}">${iV(p.bbPos)}</div></div>
+      <div class="ind" style="border-color:rgba(0,212,255,0.15);background:rgba(0,212,255,0.04)">
+        <div class="indn" style="color:var(--cyan)">5M HTF</div>
+        <div class="indv ${iClass(p.htfTrend,'htf')}">${iV(p.htfTrend)}</div>
+      </div>
     </div>
 
     <div class="hist-row">
       <span class="hist-lbl">LAST 5:</span>
       ${hist.map(s=>`<div class="hdot ${s.toLowerCase()}"></div>`).join('')}
-      ${p.rawSignal&&p.rawSignal!==p.signal?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:4px">now:${p.rawSignal}</span>`:''}
+      ${p.rawSignal&&p.rawSignal!==p.signal?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:4px">raw:${p.rawSignal}</span>`:''}
+      ${p.streak?`<span style="font-size:9px;font-family:var(--mono);color:var(--muted);margin-left:6px">${p.streak}</span>`:''}
     </div>
 
-    <div class="tags">
-      ${(p.reasons||[]).slice(0,3).map(r=>`<span class="tag">${r}</span>`).join('')}
-      ${p.pattern&&p.pattern!=='none'?`<span class="tag" style="color:var(--gold);border-color:rgba(255,208,96,0.2)">${p.pattern}</span>`:''}
+    <div class="tags">${reasonTags}
+      ${p.pattern&&p.pattern!=='none'?`<span class="tag hi">${p.pattern}</span>`:''}
     </div>
 
     <div class="dqrow">
-      <div class="dqlbl">${p.candleCount}c</div>
+      <div class="dqlbl">${p.candleCount}×1M</div>
       <div class="dqbar"><div class="dqfill" style="width:${dq}%"></div></div>
-      <div class="dqlbl">${dq<100?'Building...':'Ready ✓'}</div>
+      <div class="dqlbl">${p.candle5mCount||0}×5M</div>
+      <div class="dqbar" style="flex:0.5"><div class="dqfill" style="width:${dq5m}%;background:var(--cyan)"></div></div>
+      <div class="dqlbl">${dq>=100&&dq5m>=50?'Ready ✓':'Building'}</div>
     </div>
+
+    <!-- Entry Now badge (shown when <=5s and confirmed signal) -->
+    <div class="entry-now-badge" id="enb-${p.symbol}"></div>
   </div>`;
 }
 
-// ── Render state ─────────────────────────────────────────────
+// ── Render state ─────────────────────────────────────────────────
 function renderOTCState(state) {
   if (!state || !state.pairs) return;
   otcData = state;
@@ -498,6 +745,16 @@ function renderOTCState(state) {
   document.getElementById('sS').textContent = sells;
   document.getElementById('sW').textContent = pairs.filter(p => p.signal === 'WAIT').length;
 
+  // 5M alignment count
+  const htfAligned = pairs.filter(p =>
+    (p.signal === 'BUY'  && p.htfTrend === 'UP') ||
+    (p.signal === 'SELL' && p.htfTrend === 'DOWN')
+  ).length;
+  const s5mEl = document.getElementById('s5m');
+  s5mEl.textContent = htfAligned + ' aligned';
+  s5mEl.style.color = htfAligned >= 2 ? 'var(--buy)' : 'var(--muted)';
+
+  // Best confirmed
   const best = pairs
     .filter(p => p.signal !== 'WAIT' && p.isConfirmed)
     .sort((a,b) => b.confidence - a.confidence)[0]
@@ -505,7 +762,8 @@ function renderOTCState(state) {
 
   const bestEl = document.getElementById('sBest');
   if (best) {
-    bestEl.textContent = `${best.displayName.replace(' OTC','')} ${best.signal} ${best.confidence}%${best.isConfirmed?' ✓':''}`;
+    const htfNote = best.htfTrend && best.htfTrend !== 'FLAT' ? ` · 5M:${best.htfTrend}` : '';
+    bestEl.textContent = `${best.displayName.replace(' OTC','')} ${best.signal} ${best.confidence}%${best.isConfirmed?' ✓':''}${htfNote}`;
     bestEl.style.color = best.signal === 'BUY' ? 'var(--buy)' : 'var(--sell)';
   } else {
     bestEl.textContent = 'Building candles...';
@@ -515,9 +773,15 @@ function renderOTCState(state) {
   const t = new Date(state.serverTime);
   document.getElementById('upd').textContent =
     `Updated ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())} UTC`;
+
+  // If already in warning zone, refresh immediately
+  if (currentSecsLeft <= 10) {
+    triggerEntryAlert(currentSecsLeft);
+    triggerFinalBanner(currentSecsLeft);
+  }
 }
 
-// ── WebSocket ────────────────────────────────────────────────
+// ── WebSocket ─────────────────────────────────────────────────────
 const WSU = location.hostname === 'localhost'
   ? 'ws://localhost:3001'
   : 'wss://rk-dxb-trader.onrender.com';
@@ -541,61 +805,28 @@ function connect() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'auth_ok') {
-        setConn('live', 'Live');
-        return;
-      }
-      if (msg.type === 'token_refresh') {
-        // Server restarted — silently accept new token, no disruption
-        TOKEN = msg.token;
-        localStorage.setItem('rk_auth_token', TOKEN);
-        return;
-      }
-      if (msg.type === 'kicked') {
-        alert('⚠️ Another device logged in. Session ended.');
-        localStorage.removeItem('rk_auth_email');
-        localStorage.removeItem('rk_auth_token');
-        location.href = 'index.html';
-        return;
-      }
-      if (msg.type === 'auth_failed') {
-        // Email not authorized — redirect to login
-        localStorage.removeItem('rk_auth_email');
-        localStorage.removeItem('rk_auth_token');
-        location.href = 'index.html';
-        return;
-      }
-      // Handle OTC state updates
-      if (msg.type === 'otc') {
-        renderOTCState(msg);
-      }
-      // Ignore type:'state' (forex) messages — this is the OTC page
-    } catch(err) { /* ignore parse errors */ }
+      if (msg.type === 'auth_ok')      { setConn('live', 'Live'); return; }
+      if (msg.type === 'token_refresh') { TOKEN = msg.token; localStorage.setItem('rk_auth_token', TOKEN); return; }
+      if (msg.type === 'kicked')        { alert('⚠️ Another device logged in.'); localStorage.removeItem('rk_auth_email'); localStorage.removeItem('rk_auth_token'); location.href='index.html'; return; }
+      if (msg.type === 'auth_failed')   { localStorage.removeItem('rk_auth_email'); localStorage.removeItem('rk_auth_token'); location.href='index.html'; return; }
+      if (msg.type === 'otc')           { renderOTCState(msg); }
+    } catch(err) {}
   };
 
-  ws.onclose = () => {
-    setConn('off', 'Reconnecting');
-    reconnTimer = setTimeout(connect, 4000);
-  };
+  ws.onclose = () => { setConn('off','Reconnecting'); reconnTimer = setTimeout(connect, 4000); };
   ws.onerror = () => ws.close();
 }
 
-// ── REST fallback — only if WS not connected ─────────────────
-// Polls every 4s but ONLY when WebSocket is NOT live
-// This prevents double-rendering and flickering
+// ── REST fallback (only when WS down) ────────────────────────────
 function restPoll() {
-  if (ws && ws.readyState === WebSocket.OPEN) return; // WS is live, skip
+  if (ws && ws.readyState === WebSocket.OPEN) return;
   fetch('https://rk-dxb-trader.onrender.com/api/otc')
-    .then(r => {
-      if (!r.ok) throw new Error('not ok');
-      return r.json();
-    })
-    .then(data => { if (data && data.pairs) renderOTCState(data); })
-    .catch(() => {}); // Silent fail
+    .then(r => { if(!r.ok) throw 0; return r.json(); })
+    .then(d => { if(d && d.pairs) renderOTCState(d); })
+    .catch(() => {});
 }
 
-// ── Init ─────────────────────────────────────────────────────
-// Skeleton
+// ── Init ──────────────────────────────────────────────────────────
 document.getElementById('grid').innerHTML = [
   'EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','EUR/GBP',
   'GBP/JPY','EUR/JPY','USD/CHF','NZD/USD','BTC/USD','ETH/USD'
@@ -608,10 +839,7 @@ document.getElementById('grid').innerHTML = [
 </div>`).join('');
 
 connect();
-
-// Initial REST fetch after 1s
 setTimeout(restPoll, 1000);
-// REST fallback every 4s (only fires when WS is down)
 setInterval(restPoll, 4000);
 </script>
 </body>
