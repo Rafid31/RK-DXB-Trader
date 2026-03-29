@@ -1,37 +1,36 @@
 // ================================================================
-// RK DXB Trader — OTC Signal Engine v3.0  (SVG-NATIVE ANALYSIS)
+// RK DXB Trader — OTC Signal Engine v4.0  (OTC-NATIVE PREDICTION)
 //
-// Root-cause fix: po-static.com SVG normalises its Y-axis to the
-// LOCAL price range on EVERY fetch (using minY/maxY of that fetch).
-// This means candle OHLC values from different fetches live in
-// completely different normalisation frames — making cross-candle
-// RSI / EMA / MACD / BB all meaningless noise.
+// CORE INSIGHT (v4.0 rewrite):
+// The old engine voted "slope UP → BUY" — meaning "current candle
+// going up → next candle also goes up."  That is WRONG for OTC 1M
+// markets which are strongly MEAN-REVERTING at short timeframes.
 //
-// Solution: compute ALL indicators directly on the ~62 price points
-// that come from a SINGLE SVG fetch (same normalisation frame →
-// 100 % reliable). Store a rolling history of these analyses (~30
-// entries = ~60 seconds) and confirm signals when 5 consecutive
-// ticks agree (~10 seconds).  No more 3-minute wait.
+// Correct approach: predict the NEXT candle by reading the CURRENT
+// candle's STRUCTURE (wick, exhaustion, momentum shift) rather than
+// blindly following its direction.
 //
-// Architecture:
-//   SVG fetch (62 pts, same frame) → analyzeCurrentFetch()
-//     → RSI, slope, BB, Stoch, WR, liquidity-sweep
-//   Rolling svgHistory (last 30 entries ≈ 60 s)
-//     → trend persistence score → fast confirmation
-//   Closed 1-min candles (store SVG slope per candle)
-//     → calc5MinTrend() → HTF filter (reliable slope-based)
+// PREDICTION HIERARCHY for OTC next-candle:
+//   TIER 1 — Candle structure (most reliable, 4-5 pts)
+//     • Upper/lower wick → reversal signal
+//     • Price exhaustion: pricePos at extreme + overbought/oversold
+//     • Q4 reversal: candle was UP but Q4 slope turned DN (or vice-versa)
+//     • Consecutive same-direction 1M candles → reversal due
 //
-// Signal fires when:
-//   a) margin >= 5 AND total >= 8   (strong multi-indicator agree)
-//   b) margin >= 4 AND total >= 7   AND SVG slope is directional
-//   c) liquidity sweep detected      AND margin >= 3
-//   d) 5M HTF must agree or be FLAT (blocks counter-trend, allows sweep)
+//   TIER 2 — Oscillator confirmation (2-3 pts)
+//     • RSI extreme (<25 bullish, >75 bearish)
+//     • Stochastic extreme (<20 / >80)
+//     • BB band touch (above upper → sell, below lower → buy)
+//     • SVG history trend persistence
 //
-// Confirmation:
-//   Immediate : liquidity sweep detected
-//   Fast      : 3 consecutive same raw signal + confidence >= 72
-//   Standard  : 5 consecutive same raw signal (~10 seconds)
-//   Clear     : 5 consecutive WAITs
+//   TIER 3 — Timeframe alignment (boost/filter)
+//     • 5M HTF bias (+3 when aligned, blocks counter-trend)
+//     • 15s micro-trend (+2 aligned, triple bonus +3)
+//     • Liquidity sweep (strong reversal override)
+//
+// Three-timeframe TRIPLE alignment:
+//   5M HTF + 1M candle structure + 15s micro ALL agree → +3 bonus
+//   → "✅ 5M+1M+15s ALL UP/DN" — highest confidence signals
 // ================================================================
 
 'use strict';
@@ -54,8 +53,6 @@ function linSlope(vals) {
   return den === 0 ? 0 : num / den;
 }
 
-// RSI — works on any price array, reliable when all prices share
-// the same normalisation frame (i.e. within a single SVG fetch).
 function calcRSI(prices, period) {
   period = period || 14;
   if (prices.length < period + 1) return null;
@@ -67,7 +64,6 @@ function calcRSI(prices, period) {
   return parseFloat((100 - 100 / (1 + gains / losses)).toFixed(1));
 }
 
-// Bollinger Bands — reliable on same-frame price array.
 function calcBB(prices, period) {
   period = period || 20;
   if (prices.length < period) {
@@ -79,7 +75,6 @@ function calcBB(prices, period) {
   const upper = ma + 2 * sd, lower = ma - 2 * sd;
   const last  = prices[prices.length - 1];
   const range = upper - lower || 0.001;
-  // squeeze: std-dev < 2 % of mid on a 0-100 scale → expect breakout
   return {
     pos: last > upper ? 'ABOVE' : last < lower ? 'BELOW' : 'MID',
     pct: parseFloat(((last - lower) / range * 100).toFixed(1)),
@@ -90,9 +85,7 @@ function calcBB(prices, period) {
 
 // ── Analyse a single SVG fetch ───────────────────────────────────
 // pts = [{x, price}] — ALL from the SAME normalisation frame.
-// price = (maxY - y) / (maxY - minY) * 100  →  0 = low, 100 = high.
-// Because all 62 points share the frame, every indicator here is
-// comparing apples to apples and is completely reliable.
+// Now includes candle STRUCTURE analysis: wick, body, exhaustion.
 function analyzeCurrentFetch(pts) {
   if (!pts || pts.length < 8) return null;
 
@@ -101,51 +94,59 @@ function analyzeCurrentFetch(pts) {
   const half   = Math.floor(n / 2);
   const third  = Math.floor(n / 3);
 
-  // ── Slopes (reliable — same frame) ──────────────────────────
-  const slopeFull   = linSlope(prices);                            // full-minute trend
-  const slopeRecent = linSlope(prices.slice(-Math.max(third, 5))); // last ~20 s
-  const slopeEarly  = linSlope(prices.slice(0, half));             // first ~30 s
-  const momentum    = slopeRecent - slopeEarly;                    // accel / decel
+  // ── Slopes ───────────────────────────────────────────────────
+  const slopeFull   = linSlope(prices);
+  const slopeRecent = linSlope(prices.slice(-Math.max(third, 5)));
+  const slopeEarly  = linSlope(prices.slice(0, half));
+  const momentum    = slopeRecent - slopeEarly;
 
-  // ── RSI (14 periods on up to 62 points) ─────────────────────
+  // ── RSI ──────────────────────────────────────────────────────
   const rsi = calcRSI(prices, Math.min(14, n - 1));
 
-  // ── Bollinger Bands (20-period) ──────────────────────────────
+  // ── Bollinger Bands ──────────────────────────────────────────
   const bb = calcBB(prices, Math.min(20, n));
 
   // ── Stochastic & Williams %R ─────────────────────────────────
-  // Use the price itself as H/L/C — valid because all values are
-  // in the same normalisation frame within this fetch.
-  const period     = Math.min(14, n);
+  const period       = Math.min(14, n);
   const recentPrices = prices.slice(-period);
-  const stochH     = Math.max(...recentPrices);
-  const stochL     = Math.min(...recentPrices);
-  const stoch      = stochH === stochL ? 50 :
-    parseFloat(((prices[n - 1] - stochL) / (stochH - stochL) * 100).toFixed(1));
-  const wr         = stochH === stochL ? -50 :
-    parseFloat(((stochH - prices[n - 1]) / (stochH - stochL) * -100).toFixed(1));
+  const stochH       = Math.max(...recentPrices);
+  const stochL       = Math.min(...recentPrices);
+  const stoch = stochH === stochL ? 50 :
+    parseFloat(((prices[n-1] - stochL) / (stochH - stochL) * 100).toFixed(1));
+  const wr = stochH === stochL ? -50 :
+    parseFloat(((stochH - prices[n-1]) / (stochH - stochL) * -100).toFixed(1));
 
-  // ── Price position in this fetch ────────────────────────────
+  // ── Price position in fetch ──────────────────────────────────
   const fetchH   = Math.max(...prices);
   const fetchL   = Math.min(...prices);
   const pricePos = fetchH === fetchL ? 50 :
-    parseFloat(((prices[n - 1] - fetchL) / (fetchH - fetchL) * 100).toFixed(1));
+    parseFloat(((prices[n-1] - fetchL) / (fetchH - fetchL) * 100).toFixed(1));
 
-  // ── 15-second quadrant analysis (Q1..Q4, ~15 s each) ────────
-  // Split 62 pts into 4 equal quarters → each is ~15 real seconds.
-  // Q4 slope = closing momentum of the current candle.
+  // ── CANDLE STRUCTURE (wick / body analysis) ──────────────────
+  // This is the #1 predictor of next-candle direction in OTC markets.
+  const openP  = prices[0];          // candle open
+  const closeP = prices[n - 1];      // candle close
+  const highP  = fetchH;
+  const lowP   = fetchL;
+  const range  = highP - lowP || 0.01;
+  const bodyTop    = Math.max(openP, closeP);
+  const bodyBot    = Math.min(openP, closeP);
+  const upperWick  = (highP - bodyTop)  / range;   // wick above body (0-1)
+  const lowerWick  = (bodyBot - lowP)   / range;   // wick below body (0-1)
+  const bodySize   = (bodyTop - bodyBot) / range;  // body size (0-1)
+  const bodyDir    = closeP > openP ? 'UP' : closeP < openP ? 'DOWN' : 'FLAT';
+
+  // ── 15-second quadrant analysis ──────────────────────────────
   const qSz = Math.max(Math.floor(n / 4), 3);
   const quads = {
     q1:    linSlope(prices.slice(0, qSz)),
     q2:    linSlope(prices.slice(qSz, qSz * 2)),
     q3:    linSlope(prices.slice(qSz * 2, qSz * 3)),
-    q4:    linSlope(prices.slice(qSz * 3)),   // last ~15 s = closing momentum
-    accel: 0
+    q4:    linSlope(prices.slice(qSz * 3))
   };
-  quads.accel = quads.q4 - quads.q1;  // + = speeding up bullish; − = speeding up bearish
+  quads.accel = quads.q4 - quads.q1;
 
-  // ── Micro liquidity sweep (within single fetch → reliable) ──
-  // Sweep: price wicks past the first-half range, then closes back.
+  // ── Micro liquidity sweep ────────────────────────────────────
   const earlyH = Math.max(...prices.slice(0, half));
   const earlyL = Math.min(...prices.slice(0, half));
   const lateH  = Math.max(...prices.slice(half));
@@ -161,6 +162,8 @@ function analyzeCurrentFetch(pts) {
   return {
     slopeFull, slopeRecent, slopeEarly, momentum,
     rsi, bb, stoch, wr, pricePos, sweep, quads,
+    // candle structure
+    wick: { upperWick, lowerWick, bodySize, bodyDir, openP, closeP, highP, lowP },
     firstPrice: prices[0],
     lastPrice:  prices[n - 1],
     n
@@ -168,38 +171,27 @@ function analyzeCurrentFetch(pts) {
 }
 
 // ── 15-Second candle trend ───────────────────────────────────────
-// Uses the rolling candle15sStore (closed 15s candles, each with a
-// reliable SVG slope).  Gives a micro-timeframe bias that sits between
-// the current SVG fetch analysis and the 5M HTF.
-//
-// Weight: most recent 4 candles (= last 1 minute of 15s data) matter
-// most — they show whether momentum is building or fading RIGHT NOW.
 function calc15sTrend(candles15s) {
   if (!candles15s || candles15s.length < 4)
     return { trend: 'FLAT', strength: 0, avgSlope: 0 };
 
-  // Use last 16 candles = last 4 minutes of 15s data
   const recent  = candles15s.slice(-Math.min(16, candles15s.length));
   const slopes  = recent.map(c => c.slope || 0);
   const avgAll  = avg(slopes);
-  const avgLast = avg(slopes.slice(-4));  // last 4 × 15s = last 1 minute
+  const avgLast = avg(slopes.slice(-4));
 
   let up = 0, dn = 0;
-  // Long window bias (4 minutes)
   if (avgAll  >  0.2) up += 2; else if (avgAll  < -0.2) dn += 2;
-  // Short window (last 1 min) — higher weight for recency
   if      (avgLast >  0.35) up += 3;
   else if (avgLast >  0.15) up += 1;
   if      (avgLast < -0.35) dn += 3;
   else if (avgLast < -0.15) dn += 1;
 
-  // Directional candle count
   const upCnt = slopes.filter(s => s >  0.1).length;
   const dnCnt = slopes.filter(s => s < -0.1).length;
   if (upCnt > dnCnt + 4) up += 2;
   if (dnCnt > upCnt + 4) dn += 2;
 
-  // RSI from last closed 15s candle (micro oversold/overbought)
   const lastC = recent[recent.length - 1];
   if (lastC && lastC.rsi != null) {
     if      (lastC.rsi < 30) up += 1;
@@ -213,14 +205,9 @@ function calc15sTrend(candles15s) {
 }
 
 // ── 5-Min HTF using stored 1-min candle slopes ───────────────────
-// Each closed 1-min candle stores the SVG slope from its final tick
-// (computed within one SVG fetch → reliable).  Using those slopes
-// instead of the unreliable cross-fetch close prices gives a
-// trustworthy longer-timeframe bias.
 function calc5MinTrend(candles1m) {
   if (!candles1m || candles1m.length < 3) return { trend: 'FLAT', strength: 0 };
 
-  // Last 10 closed candles (≈ 10 min window)
   const recent  = candles1m.slice(-Math.min(10, candles1m.length));
   const slopes  = recent.map(c => c.slope || 0);
   const avgAll  = avg(slopes);
@@ -230,7 +217,6 @@ function calc5MinTrend(candles1m) {
   if (avgAll  >  0.2) up += 2; else if (avgAll  < -0.2) dn += 2;
   if (avgLast >  0.3) up += 2; else if (avgLast < -0.3) dn += 2;
 
-  // Count candles that have a clear direction
   const upCnt = slopes.filter(s => s >  0.1).length;
   const dnCnt = slopes.filter(s => s < -0.1).length;
   if (upCnt > dnCnt + 2) up += 2;
@@ -242,171 +228,247 @@ function calc5MinTrend(candles1m) {
   return { trend: 'FLAT', strength: 0, avgSlope: avgAll };
 }
 
-// ── Core signal from current SVG analysis ───────────────────────
+// ── Count consecutive same-direction 1M candles ──────────────────
+function countConsecutive(candles1m) {
+  if (!candles1m || candles1m.length < 2) return { up: 0, dn: 0 };
+  const slopes = candles1m.slice(-6).map(c => c.slope || 0);
+  let up = 0, dn = 0;
+  for (let i = slopes.length - 1; i >= 0; i--) {
+    if (slopes[i] >  0.12) up++; else break;
+  }
+  for (let i = slopes.length - 1; i >= 0; i--) {
+    if (slopes[i] < -0.12) dn++; else break;
+  }
+  return { up, dn };
+}
+
+// ── Core signal: OTC NEXT-CANDLE PREDICTION ──────────────────────
+// v4.0 — predicts the NEXT candle direction by reading the CURRENT
+// candle's exhaustion and structure, not just its slope direction.
 function calcRawSignal(analysis, svgHistory, candles1m, candles15s) {
   if (!analysis) {
-    return { signal: 'WAIT', confidence: 0, reason: 'Collecting SVG data...',
+    return { signal: 'WAIT', confidence: 0, reason: 'Collecting data...',
              votes: { up: 0, dn: 0, total: 0, margin: 0 }, reasons: [] };
   }
 
   let up = 0, dn = 0;
   const reasons = [];
 
-  // ── 1. FULL-MINUTE SLOPE — primary (62 same-frame points) ───
-  const sf = analysis.slopeFull;
-  if      (sf >  0.8) { up += 5; reasons.push('Strong slope UP ' + sf.toFixed(2)); }
-  else if (sf >  0.4) { up += 3; reasons.push('Slope UP ' + sf.toFixed(2)); }
-  else if (sf >  0.15) up += 1;
-  if      (sf < -0.8) { dn += 5; reasons.push('Strong slope DN ' + sf.toFixed(2)); }
-  else if (sf < -0.4) { dn += 3; reasons.push('Slope DN ' + sf.toFixed(2)); }
-  else if (sf < -0.15) dn += 1;
-
-  // ── 2. RECENT SLOPE (last ~20 s) — momentum ─────────────────
-  const sr = analysis.slopeRecent;
-  if      (sr >  0.5) { up += 2; reasons.push('Recent accel UP'); }
-  else if (sr >  0.2)   up += 1;
-  if      (sr < -0.5) { dn += 2; reasons.push('Recent accel DN'); }
-  else if (sr < -0.2)   dn += 1;
-
-  // ── 3. RSI — reliable (same frame) ──────────────────────────
+  const sf  = analysis.slopeFull;
+  const q4  = analysis.quads ? analysis.quads.q4 : 0;
   const rsi = analysis.rsi;
+  const st  = analysis.stoch;
+  const pp  = analysis.pricePos;   // 0=bottom, 100=top of candle range
+
+  // ══════════════════════════════════════════════════════════════
+  // TIER 1 — CANDLE STRUCTURE (OTC's primary reversal signals)
+  // ══════════════════════════════════════════════════════════════
+
+  // ── 1. WICK ANALYSIS ─────────────────────────────────────────
+  // Long upper wick = price rejected at high → SELL next candle
+  // Long lower wick = price rejected at low  → BUY next candle
+  const { upperWick, lowerWick, bodySize, bodyDir } = analysis.wick || {};
+  if (upperWick != null) {
+    if (upperWick > 0.40) {
+      dn += 5; reasons.push(`Long upper wick ${(upperWick*100).toFixed(0)}% → reversal`);
+    } else if (upperWick > 0.25) {
+      dn += 3; reasons.push('Upper wick → bearish');
+    } else if (upperWick > 0.15) {
+      dn += 1;
+    }
+    if (lowerWick > 0.40) {
+      up += 5; reasons.push(`Long lower wick ${(lowerWick*100).toFixed(0)}% → reversal`);
+    } else if (lowerWick > 0.25) {
+      up += 3; reasons.push('Lower wick → bullish');
+    } else if (lowerWick > 0.15) {
+      up += 1;
+    }
+  }
+
+  // ── 2. PRICE EXHAUSTION ──────────────────────────────────────
+  // Price near the TOP with overbought oscillators = reversal imminent.
+  // Price near the BOTTOM with oversold oscillators = bounce imminent.
+  if (pp >= 85) {
+    if      ((rsi != null && rsi > 72) || st > 80) { dn += 5; reasons.push(`Exhaustion TOP ${pp.toFixed(0)}%`); }
+    else if (pp >= 90)                               { dn += 3; reasons.push(`Near TOP ${pp.toFixed(0)}%`); }
+    else                                             { dn += 2; }
+  } else if (pp >= 75 && (rsi != null && rsi > 68)) {
+    dn += 2;
+  }
+
+  if (pp <= 15) {
+    if      ((rsi != null && rsi < 28) || st < 20) { up += 5; reasons.push(`Exhaustion BOT ${pp.toFixed(0)}%`); }
+    else if (pp <= 10)                               { up += 3; reasons.push(`Near BOT ${pp.toFixed(0)}%`); }
+    else                                             { up += 2; }
+  } else if (pp <= 25 && (rsi != null && rsi < 32)) {
+    up += 2;
+  }
+
+  // ── 3. Q4 REVERSAL DETECTION ─────────────────────────────────
+  // If the current candle was going UP but Q4 slope turned DOWN →
+  // the candle is ALREADY reversing → strong SELL for next candle.
+  // If the candle was going DOWN but Q4 turned UP → strong BUY.
+  if (sf > 0.4 && q4 < -0.3) {
+    dn += 5; reasons.push('Candle turning DN in close (Q4 reversal)');
+  } else if (sf > 0.2 && q4 < -0.2) {
+    dn += 3; reasons.push('Q4 momentum shift DN');
+  }
+  if (sf < -0.4 && q4 > 0.3) {
+    up += 5; reasons.push('Candle turning UP in close (Q4 reversal)');
+  } else if (sf < -0.2 && q4 > 0.2) {
+    up += 3; reasons.push('Q4 momentum shift UP');
+  }
+
+  // Q4 continuation: candle still going same direction at close
+  // → weaker signal but valid for strong trends
+  if (q4 > 0.7 && sf > 0.3) { up += 2; reasons.push('Strong Q4 close UP'); }
+  else if (q4 > 0.4 && sf > 0.2) up += 1;
+  if (q4 < -0.7 && sf < -0.3) { dn += 2; reasons.push('Strong Q4 close DN'); }
+  else if (q4 < -0.4 && sf < -0.2) dn += 1;
+
+  // ── 4. CONSECUTIVE CANDLE EXHAUSTION ─────────────────────────
+  // In OTC markets: 3+ consecutive same-direction candles → high
+  // probability of reversal on the next candle.
+  const { up: consecUp, dn: consecDn } = countConsecutive(candles1m);
+  if (consecUp >= 4) {
+    dn += 5; reasons.push(`${consecUp} consec UP → reversal due`);
+  } else if (consecUp >= 3) {
+    dn += 3; reasons.push(`${consecUp} consec UP → watch reversal`);
+  } else if (consecUp === 2) {
+    dn += 1;
+  }
+  if (consecDn >= 4) {
+    up += 5; reasons.push(`${consecDn} consec DN → reversal due`);
+  } else if (consecDn >= 3) {
+    up += 3; reasons.push(`${consecDn} consec DN → watch reversal`);
+  } else if (consecDn === 2) {
+    up += 1;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // TIER 2 — OSCILLATOR CONFIRMATION
+  // ══════════════════════════════════════════════════════════════
+
+  // ── 5. RSI EXTREMES ──────────────────────────────────────────
   if (rsi !== null) {
-    if      (rsi < 20) { up += 4; reasons.push('RSI extreme OS ' + rsi); }
-    else if (rsi < 30) { up += 3; reasons.push('RSI oversold '   + rsi); }
+    if      (rsi < 20) { up += 3; reasons.push('RSI extreme OS ' + rsi); }
+    else if (rsi < 30) { up += 2; reasons.push('RSI oversold '   + rsi); }
     else if (rsi < 40)   up += 1;
-    else if (rsi > 80) { dn += 4; reasons.push('RSI extreme OB ' + rsi); }
-    else if (rsi > 70) { dn += 3; reasons.push('RSI overbought ' + rsi); }
+    if      (rsi > 80) { dn += 3; reasons.push('RSI extreme OB ' + rsi); }
+    else if (rsi > 70) { dn += 2; reasons.push('RSI overbought ' + rsi); }
     else if (rsi > 60)   dn += 1;
   }
 
-  // ── 4. BOLLINGER BANDS — reliable ───────────────────────────
+  // ── 6. STOCHASTIC EXTREMES ───────────────────────────────────
+  if      (st < 20) { up += 2; reasons.push('Stoch OS ' + st); }
+  else if (st < 30)   up += 1;
+  if      (st > 80) { dn += 2; reasons.push('Stoch OB ' + st); }
+  else if (st > 70)   dn += 1;
+
+  // ── 7. BOLLINGER BANDS ───────────────────────────────────────
   if (analysis.bb.pos === 'BELOW') { up += 2; reasons.push('Below BB lower'); }
   if (analysis.bb.pos === 'ABOVE') { dn += 2; reasons.push('Above BB upper'); }
-  if (analysis.bb.squeeze)           reasons.push('BB squeeze — breakout due');
 
-  // ── 5. STOCHASTIC — reliable ─────────────────────────────────
-  const st = analysis.stoch;
-  if      (st < 20) { up += 2; reasons.push('Stoch OS ' + st); }
-  else if (st < 35)   up += 1;
-  else if (st > 80) { dn += 2; reasons.push('Stoch OB ' + st); }
-  else if (st > 65)   dn += 1;
+  // ── 8. SVG HISTORY TREND PERSISTENCE ────────────────────────
+  // Consistent multi-fetch trend over ~60 s (reliable same-frame data)
+  const hist = svgHistory || [];
+  if (hist.length >= 8) {
+    const h15  = hist.slice(-15);
+    const h8   = hist.slice(-8);
+    const up15 = h15.filter(h => h.slopeFull >  0.15).length;
+    const dn15 = h15.filter(h => h.slopeFull < -0.15).length;
+    const up8  = h8.filter(h  => h.slopeFull >  0.10).length;
+    const dn8  = h8.filter(h  => h.slopeFull < -0.10).length;
+    if      (up15 >= 11) { up += 2; reasons.push(up15 + '/15 fetches UP'); }
+    else if (up8  >=  6) { up += 1; }
+    if      (dn15 >= 11) { dn += 2; reasons.push(dn15 + '/15 fetches DN'); }
+    else if (dn8  >=  6) { dn += 1; }
+  }
 
-  // ── 6. WILLIAMS %R — reliable ───────────────────────────────
-  if (analysis.wr <= -80) up += 1;
-  if (analysis.wr >= -20) dn += 1;
+  // ══════════════════════════════════════════════════════════════
+  // TIER 3 — TIMEFRAME ALIGNMENT (boost / filter)
+  // ══════════════════════════════════════════════════════════════
 
-  // ── 7. LIQUIDITY SWEEP — strong reversal ────────────────────
+  // ── 9. 5M HTF ────────────────────────────────────────────────
+  const htf = calc5MinTrend(candles1m);
+  let htfBoost = 0, htfBlock = false;
+  if (htf.trend !== 'FLAT') {
+    const goUp = up > dn, goDn = dn > up;
+    if (htf.trend === 'UP'   && goUp) { up += 3; htfBoost = 3; reasons.push('5M UP aligns'); }
+    if (htf.trend === 'DOWN' && goDn) { dn += 3; htfBoost = 3; reasons.push('5M DN aligns'); }
+    // Block strong counter-trend unless a sweep is present
+    if (htf.trend === 'UP'   && goDn && !analysis.sweep) htfBlock = true;
+    if (htf.trend === 'DOWN' && goUp && !analysis.sweep) htfBlock = true;
+  }
+
+  // ── 10. 15s MICRO TREND ──────────────────────────────────────
+  const trend15s = calc15sTrend(candles15s);
+  if (trend15s.trend !== 'FLAT') {
+    if (trend15s.trend === 'UP'   && up  > dn) { up += 2; reasons.push('15s micro UP'); }
+    if (trend15s.trend === 'DOWN' && dn  > up) { dn += 2; reasons.push('15s micro DN'); }
+    // Triple alignment: 5M + 1M structure + 15s micro all agree
+    if (htf.trend === 'UP'   && trend15s.trend === 'UP'   && up > dn) {
+      up += 3; reasons.push('✅ 5M+1M+15s ALL UP');
+    }
+    if (htf.trend === 'DOWN' && trend15s.trend === 'DOWN' && dn > up) {
+      dn += 3; reasons.push('✅ 5M+1M+15s ALL DN');
+    }
+  }
+
+  // ── 11. LIQUIDITY SWEEP ──────────────────────────────────────
+  // Strong reversal override — highly reliable within-fetch signal
   if (analysis.sweep) {
     if (analysis.sweep.bias > 0) { up += 4; reasons.push(analysis.sweep.reason); }
     else                          { dn += 4; reasons.push(analysis.sweep.reason); }
   }
 
-  // ── 8. SVG HISTORY TREND — slope persistence over ~30–60 s ──
-  const hist = svgHistory || [];
-  if (hist.length >= 8) {
-    const h15      = hist.slice(-15);
-    const h8       = hist.slice(-8);
-    const up15     = h15.filter(h => h.slopeFull >  0.15).length;
-    const dn15     = h15.filter(h => h.slopeFull < -0.15).length;
-    const up8      = h8.filter(h  => h.slopeFull >  0.10).length;
-    const dn8      = h8.filter(h  => h.slopeFull < -0.10).length;
-
-    if      (up15 >= 11) { up += 3; reasons.push(up15 + '/15 fetches UP trend'); }
-    else if (up8  >= 6)  { up += 2; reasons.push(up8  + '/8 fetches UP'); }
-    if      (dn15 >= 11) { dn += 3; reasons.push(dn15 + '/15 fetches DN trend'); }
-    else if (dn8  >= 6)  { dn += 2; reasons.push(dn8  + '/8 fetches DN'); }
-  }
-
-  // ── 9. 5-MIN HTF — slope-based (reliable) ───────────────────
-  const htf = calc5MinTrend(candles1m);
-  let htfBoost = 0, htfBlock = false;
-  const goingUp   = up > dn;
-  const goingDown = dn > up;
-  if (htf.trend !== 'FLAT') {
-    if (htf.trend === 'UP'   && goingUp)    { htfBoost = 3; reasons.push('5M UP aligns'); }
-    if (htf.trend === 'DOWN' && goingDown)  { htfBoost = 3; reasons.push('5M DN aligns'); }
-    // Block counter-trend signals (allow sweep reversals through)
-    if (htf.trend === 'UP'   && goingDown  && !analysis.sweep) htfBlock = true;
-    if (htf.trend === 'DOWN' && goingUp    && !analysis.sweep) htfBlock = true;
-  }
-
-  // ── 10. CLOSING QUADRANT Q4 (last ~15 s of candle) ──────────
-  // Closing momentum is the most predictive feature for next candle.
-  if (analysis.quads) {
-    const q4 = analysis.quads.q4;
-    if      (q4 >  0.8) { up += 3; reasons.push('Q4 strong close UP'); }
-    else if (q4 >  0.4) { up += 2; reasons.push('Q4 UP momentum'); }
-    else if (q4 >  0.2)   up += 1;
-    if      (q4 < -0.8) { dn += 3; reasons.push('Q4 strong close DN'); }
-    else if (q4 < -0.4) { dn += 2; reasons.push('Q4 DN momentum'); }
-    else if (q4 < -0.2)   dn += 1;
-    // Acceleration bonus: candle speeding up in the same direction
-    const acc = analysis.quads.accel;
-    if (acc >  0.5 && up > dn) { up += 1; reasons.push('Close accel UP'); }
-    if (acc < -0.5 && dn > up) { dn += 1; reasons.push('Close accel DN'); }
-  }
-
-  // ── 11. 15-SECOND CANDLE TREND (micro timeframe) ────────────
-  // Closed 15s candles give real historical momentum data.
-  // Triple-alignment: when 5M + 1M momentum + 15s micro ALL agree
-  // → highest confidence tier with a stacking bonus.
-  const trend15s = calc15sTrend(candles15s);
-  let t15Boost = 0;
-  if (trend15s.trend !== 'FLAT') {
-    if (trend15s.trend === 'UP'   && up  > dn) { up += 2; reasons.push('15s micro UP'); t15Boost = 2; }
-    if (trend15s.trend === 'DOWN' && dn  > up) { dn += 2; reasons.push('15s micro DN'); t15Boost = 2; }
-    // Triple alignment: 5M + current 1M + 15s micro all same direction
-    const tripleUp = htf.trend === 'UP'   && trend15s.trend === 'UP'   && up > dn;
-    const tripleDown = htf.trend === 'DOWN' && trend15s.trend === 'DOWN' && dn > up;
-    if (tripleUp)   { up += 3; reasons.push('✅ 5M+1M+15s ALL UP'); }
-    if (tripleDown) { dn += 3; reasons.push('✅ 5M+1M+15s ALL DN'); }
-  }
-
-  // ── Decision ─────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // DECISION
+  // ══════════════════════════════════════════════════════════════
   const total  = up + dn;
   const margin = Math.abs(up - dn);
-  const hasDir = Math.abs(sf) > 0.3;
+  // hasDir: we have a clear structural signal (not just noise)
+  const hasDir = upperWick > 0.15 || lowerWick > 0.15 ||
+                 pp > 75 || pp < 25 || Math.abs(q4) > 0.3 ||
+                 consecUp >= 2 || consecDn >= 2;
 
   const strongEnough =
-    (margin >= 5 && total >= 8)                     ||  // very strong agree
-    (margin >= 4 && total >= 7 && hasDir)            ||  // strong + slope
-    (analysis.sweep !== null && margin >= 3);            // sweep reversal
+    (margin >= 5 && total >= 8)                      ||
+    (margin >= 4 && total >= 7 && hasDir)             ||
+    (analysis.sweep !== null && margin >= 3);
 
   let rawSignal = 'WAIT', rawConf = 0;
   if (!htfBlock && strongEnough && up > dn) {
     rawSignal = 'BUY';
-    rawConf   = clamp(52 + margin * 4 + htfBoost, 0, 93);
+    rawConf   = clamp(52 + margin * 3.5 + htfBoost, 0, 93);
   }
   if (!htfBlock && strongEnough && dn > up) {
     rawSignal = 'SELL';
-    rawConf   = clamp(52 + margin * 4 + htfBoost, 0, 93);
+    rawConf   = clamp(52 + margin * 3.5 + htfBoost, 0, 93);
   }
 
   return {
-    signal:          rawSignal,
-    confidence:      rawConf,
+    signal:           rawSignal,
+    confidence:       rawConf,
     rsi,
-    stoch:           analysis.stoch,
-    wr:              analysis.wr,
-    bbPos:           analysis.bb.pos,
-    bbSqueeze:       analysis.bb.squeeze,
-    emaTrend:        sf >  0.2 ? 'bullish' : sf < -0.2 ? 'bearish' : 'neutral',
-    sweep:           analysis.sweep ? analysis.sweep.type : null,
-    htfTrend:        htf.trend,
-    htfStrength:     htf.strength,
-    htfBlocked:      htfBlock,
-    trend15s:        trend15s.trend,
-    trend15sStrength:trend15s.strength,
-    votes:           { up, dn, total, margin },
-    reasons:         reasons.slice(0, 9),
-    quads:           analysis.quads || null
+    stoch:            analysis.stoch,
+    wr:               analysis.wr,
+    bbPos:            analysis.bb.pos,
+    bbSqueeze:        analysis.bb.squeeze,
+    emaTrend:         sf >  0.2 ? 'bullish' : sf < -0.2 ? 'bearish' : 'neutral',
+    sweep:            analysis.sweep ? analysis.sweep.type : null,
+    htfTrend:         htf.trend,
+    htfStrength:      htf.strength,
+    htfBlocked:       htfBlock,
+    trend15s:         trend15s.trend,
+    trend15sStrength: trend15s.strength,
+    votes:            { up, dn, total, margin },
+    reasons:          reasons.slice(0, 9),
+    quads:            analysis.quads || null
   };
 }
 
 // ── Confirmation ─────────────────────────────────────────────────
-// With reliable SVG-native data, history is pushed every tick (~2 s).
-// Confirmation requires 5 consecutive same raw signals (~10 seconds).
-// This replaces the old 3-minute per-minute gate.
 const signalHistory = {};
 const confirmedSig  = {};
 
@@ -415,16 +477,12 @@ function calculateOTCSignal(symbol, svgHistory, candles1m, candles15s) {
   if (!confirmedSig[symbol])
     confirmedSig[symbol] = { signal: 'WAIT', confidence: 0, isConfirmed: false };
 
-  // Current analysis = last entry of svgHistory (most recent SVG fetch)
   const currentAnalysis = svgHistory && svgHistory.length > 0
-    ? svgHistory[svgHistory.length - 1]
-    : null;
+    ? svgHistory[svgHistory.length - 1] : null;
 
-  // Pass all three timeframes: SVG history, 1m candles (5M HTF), 15s candles
   const raw  = calcRawSignal(currentAnalysis, svgHistory, candles1m, candles15s || []);
   const hist = signalHistory[symbol];
 
-  // Push every tick — reliable because indicators use same-frame SVG data
   hist.push(raw.signal);
   if (hist.length > 20) hist.shift();
 
@@ -438,31 +496,26 @@ function calculateOTCSignal(symbol, svgHistory, candles1m, candles15s) {
     const allW5 = hist.length >= 5 && last5.every(s => s === 'WAIT');
 
     if (raw.sweep && raw.signal !== 'WAIT') {
-      // Immediate confirm on liquidity sweep — very strong signal
       confirmedSig[symbol] = {
         signal:      raw.signal,
         confidence:  Math.min(95, raw.confidence + 5),
         isConfirmed: true
       };
     } else if (same5) {
-      // 5 in a row ≈ 10 seconds of consistent direction
       confirmedSig[symbol] = {
         signal:      last5[0],
         confidence:  Math.min(93, raw.confidence + 8),
         isConfirmed: true
       };
-    } else if (same3 && raw.confidence >= 72) {
-      // 3 in a row + high confidence (strong indicators agree)
+    } else if (same3 && raw.confidence >= 70) {
       confirmedSig[symbol] = {
         signal:      last3[0],
         confidence:  raw.confidence,
         isConfirmed: true
       };
     } else if (allW5) {
-      // 5 consecutive WAITs — clear the confirmed signal
       confirmedSig[symbol] = { signal: 'WAIT', confidence: 0, isConfirmed: false };
     } else if (prev.isConfirmed && same3 && last3[0] !== 'WAIT' && last3[0] !== prev.signal) {
-      // Confirmed signal flipped direction — reset to WAIT first
       confirmedSig[symbol] = { signal: 'WAIT', confidence: 0, isConfirmed: false };
     }
   }
