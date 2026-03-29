@@ -176,6 +176,21 @@ body::before{content:'';position:fixed;inset:0;
 .htf-tag.htf-up{background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.3)}
 .htf-tag.htf-dn{background:rgba(168,85,247,0.1);color:var(--purple);border:1px solid rgba(168,85,247,0.3)}
 .htf-tag.htf-flat{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
+/* 15s micro-trend tag */
+.t15-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px;font-weight:700}
+.t15-tag.t15-up{background:rgba(0,230,118,0.1);color:var(--buy);border:1px solid rgba(0,230,118,0.3)}
+.t15-tag.t15-dn{background:rgba(255,63,90,0.1);color:var(--sell);border:1px solid rgba(255,63,90,0.3)}
+.t15-tag.t15-flat{background:rgba(74,90,128,0.08);color:var(--muted);border:1px solid rgba(74,90,128,0.2)}
+/* 15s candle bar (similar to 5M HTF bar) */
+.t15-bar-wrap{margin-bottom:7px;padding:6px 8px;
+  background:rgba(0,230,118,0.03);border:1px solid rgba(0,230,118,0.1);border-radius:7px}
+.t15-bar-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.t15-bar-lbl{font-size:9px;font-family:var(--mono);color:var(--buy);text-transform:uppercase;letter-spacing:1px}
+.t15-bar-val{font-size:9px;font-family:var(--mono);font-weight:700}
+.t15-bar-val.up{color:var(--buy)}.t15-bar-val.dn{color:var(--sell)}.t15-bar-val.flat{color:var(--muted)}
+.t15-candles{display:flex;gap:2px;align-items:flex-end;height:16px}
+.t15-c{width:5px;border-radius:1px;min-height:3px;transition:height 0.3s}
+.t15-c.bull{background:var(--buy)}.t15-c.bear{background:var(--sell)}.t15-c.flat{background:var(--muted2)}
 /* Sweep / SR badge */
 .sweep-tag{font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;letter-spacing:1px;
   background:rgba(255,208,96,0.12);color:var(--gold);border:1px solid rgba(255,208,96,0.4)}
@@ -345,7 +360,7 @@ body::before{content:'';position:fixed;inset:0;
     <div class="tbar"><div class="tfill" id="tfill" style="width:50%"></div></div>
     <span class="tsecs" id="tsecs">--s</span>
   </div>
-  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto" id="topNote">12 OTC · 1M+5M+15s · Signal revealed last 15s</span>
+  <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto" id="topNote">12 OTC · 5M+1M+15s 3-TF · Signal last 15s</span>
 </div>
 
 <!-- ENTRY ALERT TOP BAR (10s countdown with direction) -->
@@ -367,7 +382,7 @@ body::before{content:'';position:fixed;inset:0;
   <div class="stat"><div class="slbl">5M Align</div><div class="sval n" id="s5m" style="font-size:14px">—</div></div>
   <div class="sdiv"></div>
   <div class="stat"><div class="slbl">Best Confirmed</div><div class="sval n" id="sBest" style="font-size:13px">Building...</div></div>
-  <div class="note">✅ Signal = 3× same + 5M aligned</div>
+  <div class="note">✅ 3-TF: 5M + 1M + 15s micro</div>
 </div>
 
 <div class="ghdr">
@@ -653,6 +668,36 @@ function slopeBar(slope, slopeDir) {
   </div>`;
 }
 
+// ── 15-second candle trend bar ───────────────────────────────────
+function t15Bar(trend15s, strength15s, count15s, signalHistory) {
+  const t   = trend15s || 'FLAT';
+  const cls = t === 'UP' ? 'up' : t === 'DOWN' ? 'dn' : 'flat';
+  const lbl = t === 'UP' ? '↑ BULL' : t === 'DOWN' ? '↓ BEAR' : '→ FLAT';
+
+  // Mini candle bars from last 8 entries of signal history
+  const hist = (signalHistory || []).slice(-8);
+  const bars = hist.map((s, i) => {
+    const h = 4 + i * 1.5;
+    const c = s === 'BUY' ? 'bull' : s === 'SELL' ? 'bear' : 'flat';
+    return `<div class="t15-c ${c}" style="height:${h}px"></div>`;
+  }).join('');
+
+  const countTxt = count15s >= 4
+    ? `${count15s} 15s candles`
+    : `${count15s} (building…)`;
+
+  return `<div class="t15-bar-wrap">
+    <div class="t15-bar-row">
+      <span class="t15-bar-lbl">15s MICRO</span>
+      <span class="t15-bar-val ${cls}">${lbl} ${count15s >= 4 ? '(str:'+strength15s+')' : '⏳'}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="t15-candles">${bars}</div>
+      <span style="font-size:9px;font-family:var(--mono);color:var(--muted)">${countTxt}</span>
+    </div>
+  </div>`;
+}
+
 // ── Q4 closing momentum mini-bar ─────────────────────────────────
 function q4Bar(q4Slope) {
   const v   = parseFloat(q4Slope) || 0;
@@ -722,6 +767,11 @@ function renderCard(p) {
   const htfCls = htf==='UP'?'htf-up':htf==='DOWN'?'htf-dn':'htf-flat';
   const htfLabel = htf==='UP'?'5M↑':htf==='DOWN'?'5M↓':'5M→';
 
+  // 15s micro-trend badge
+  const t15    = p.trend15s || 'FLAT';
+  const t15cls = t15==='UP'?'t15-up':t15==='DOWN'?'t15-dn':'t15-flat';
+  const t15lbl = t15==='UP'?'15s↑':t15==='DOWN'?'15s↓':'15s→';
+
   const sweepBadge = p.sweep
     ? `<span class="sweep-tag">🎯 ${p.sweep.replace('_',' ')}</span>` : '';
   const squeezeBadge = p.bbSqueeze
@@ -790,6 +840,7 @@ function renderCard(p) {
           <span class="conf-tag ${(isConf||internalConf)?'ok':'raw'}">${confTagLabel}</span>
           <span class="slope-tag ${sDir}">${slopeLabel}</span>
           <span class="htf-tag ${htfCls}">${htfLabel}</span>
+          <span class="t15-tag ${t15cls}">${t15lbl}</span>
           ${sweepBadge}${squeezeBadge}
         </div>
       </div>
@@ -798,6 +849,7 @@ function renderCard(p) {
 
     ${slopeBar(p.slope, p.slopeDir || 'FLAT')}
     ${htfBar(p.htfTrend, p.htfStrength, p.candle5mCount, p.signalHistory)}
+    ${t15Bar(p.trend15s, p.trend15sStrength, p.candle15sCount||0, p.signalHistory)}
     ${q4Bar(p.q4Slope)}
 
     <div class="confrow">
@@ -834,11 +886,13 @@ function renderCard(p) {
     <div class="tags">${reasonTags}</div>
 
     <div class="dqrow">
+      <div class="dqlbl">${p.candle15sCount||0}×15s</div>
+      <div class="dqbar" style="flex:0.4"><div class="dqfill" style="width:${Math.min(100,Math.round(((p.candle15sCount||0)/16)*100))}%;background:var(--buy)"></div></div>
       <div class="dqlbl">${p.candleCount}×1M</div>
       <div class="dqbar"><div class="dqfill" style="width:${dq}%"></div></div>
       <div class="dqlbl">${p.candle5mCount||0}×5M</div>
-      <div class="dqbar" style="flex:0.5"><div class="dqfill" style="width:${dq5m}%;background:var(--cyan)"></div></div>
-      <div class="dqlbl">${dq>=100&&dq5m>=50?'Ready ✓':'Building'}</div>
+      <div class="dqbar" style="flex:0.4"><div class="dqfill" style="width:${dq5m}%;background:var(--cyan)"></div></div>
+      <div class="dqlbl">${(p.candle15sCount||0)>=4&&dq>=20?'✓':'⏳'}</div>
     </div>
 
     ${revealBanner}
@@ -884,14 +938,23 @@ function renderOTCState(state) {
     ? pairs.filter(p => p.showSignal && (!p.lockedSignal || p.lockedSignal === 'WAIT')).length
     : pairs.filter(p => p.signal === 'WAIT').length;
 
-  // 5M alignment count
+  // Triple-alignment count (5M + 1M + 15s all same direction)
+  const tripleAligned = pairs.filter(p =>
+    (p.signal === 'BUY'  && p.htfTrend === 'UP'   && p.trend15s === 'UP')  ||
+    (p.signal === 'SELL' && p.htfTrend === 'DOWN'  && p.trend15s === 'DOWN')
+  ).length;
   const htfAligned = pairs.filter(p =>
     (p.signal === 'BUY'  && p.htfTrend === 'UP') ||
     (p.signal === 'SELL' && p.htfTrend === 'DOWN')
   ).length;
   const s5mEl = document.getElementById('s5m');
-  s5mEl.textContent = htfAligned + ' aligned';
-  s5mEl.style.color = htfAligned >= 2 ? 'var(--buy)' : 'var(--muted)';
+  if (tripleAligned > 0) {
+    s5mEl.textContent = tripleAligned + ' TRIPLE ✅';
+    s5mEl.style.color = 'var(--buy)';
+  } else {
+    s5mEl.textContent = htfAligned + ' aligned';
+    s5mEl.style.color = htfAligned >= 2 ? 'var(--buy)' : 'var(--muted)';
+  }
 
   // Best confirmed — prefer revealed locked signals, fallback to engine signals
   const revealedPairs = pairs.filter(p => p.showSignal && p.lockedSignal && p.lockedSignal !== 'WAIT');

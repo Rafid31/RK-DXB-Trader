@@ -9,20 +9,22 @@
 //   • The 62 price points that share the same normalisation frame
 //   • The SVG slope (linear-regression on those same 62 pts)
 //
-// Architecture v3.0
-//   1. svgHistory  — rolling array of the last 30 SVG analyses
-//      (one entry per tick, ~2 s apart = ~60 s of reliable data)
+// Architecture v3.0 — THREE TIMEFRAME ANALYSIS
+//   1. svgHistory   — rolling 30 SVG analyses (~60 s of data)
 //      → feeds analyzeCurrentFetch() in the signal engine
-//   2. candleStore — closed 1-min candles (stores SVG slope per
-//      candle so calc5MinTrend() can use reliable slope-based HTF)
-//   3. fiveMinStore — 5-min candles for display only
+//   2. candle15sStore — closed 15-SECOND candles (4 per minute)
+//      → calc15sTrend() → micro momentum filter
+//   3. candleStore  — closed 1-min candles (SVG slope per candle)
+//      → calc5MinTrend() → reliable slope-based HTF bias
+//   4. fiveMinStore — 5-min candles for display only
 //
-// Signals are confirmed after 5 consecutive same raw signals
-// (~10 seconds) instead of the old 3-minute wait.
+// Triple-alignment bonus: when 5M + 1M + 15s all agree on direction,
+// signal confidence gets a significant boost → highest accuracy tier.
 // ================================================================
 
 const fetch = require('node-fetch');
 const { calculateOTCSignal, analyzeCurrentFetch } = require('./otcSignalEngine');
+// calc15sTrend is used inside calculateOTCSignal (passed via candles15s)
 
 const OTC_PAIRS = [
   'EURUSD_otc', 'GBPUSD_otc', 'USDJPY_otc', 'AUDUSD_otc',
@@ -40,25 +42,29 @@ const DISPLAY_NAMES = {
 };
 
 // ── Per-pair state ─────────────────────────────────────────────
-const svgHistoryStore = {};  // rolling SVG analyses  (last 30 = ~60 s)
-const tickHistory     = {};  // last 60 raw price ticks (for trend display)
-const candleStore     = {};  // closed 1-min candles with slope field
-const fiveMinStore    = {};  // 5-min candles (display only)
-const lastSignals     = {};
-const currentCandle   = {};
-const current5mCandle = {};
-const lastSlopes      = {};
-const lockedSignals   = {};  // per-minute display lock (only reveal last 15s)
+const svgHistoryStore  = {};  // rolling SVG analyses  (last 30 = ~60 s)
+const tickHistory      = {};  // last 60 raw price ticks (for trend display)
+const candle15sStore   = {};  // closed 15-second candles (last 60 = 15 min)
+const candleStore      = {};  // closed 1-min candles with slope field
+const fiveMinStore     = {};  // 5-min candles (display only)
+const lastSignals      = {};
+const currentCandle    = {};
+const current5mCandle  = {};
+const current15sCandle = {};  // accumulator for current 15s bucket
+const lastSlopes       = {};
+const lockedSignals    = {};  // per-minute display lock (only reveal last 15s)
 
 OTC_PAIRS.forEach(sym => {
   svgHistoryStore[sym]  = [];
   tickHistory[sym]      = [];
+  candle15sStore[sym]   = [];
   candleStore[sym]      = [];
   fiveMinStore[sym]     = [];
   lastSignals[sym]      = { signal: 'WAIT', confidence: 0 };
   lastSlopes[sym]       = { slope: 0, slopeDir: 'FLAT', slopeStrong: false };
   currentCandle[sym]    = null;
   current5mCandle[sym]  = null;
+  current15sCandle[sym] = null;
   lockedSignals[sym]    = null;
 });
 
@@ -155,6 +161,53 @@ function update1mCandle(symbol, pts, timestamp, svgSlope) {
   }
 }
 
+// ── 15-second candle store ─────────────────────────────────────
+// Builds a rolling history of closed 15-second candles from the
+// SVG analysis objects.  Each bucket = 15000 ms (UTC-aligned).
+// Stores: slope (avg SVG slope during the 15s), rsi, stoch,
+//         pricePos, momentum — all reliable same-frame values.
+// Used by calc15sTrend() for the micro-timeframe signal vote.
+function update15sCandle(symbol, analysis, timestamp) {
+  const bucket15s = Math.floor(timestamp / 15000) * 15000;
+  const cur       = current15sCandle[symbol];
+
+  if (!cur || cur.bucket !== bucket15s) {
+    // ── Close previous 15s candle (need ≥2 ticks for reliability) ──
+    if (cur && cur.count >= 2) {
+      const closed15s = {
+        ts:       cur.bucket,
+        slope:    parseFloat((cur.sumSlope / cur.count).toFixed(3)),
+        rsi:      cur.lastRsi,
+        stoch:    cur.lastStoch,
+        pricePos: cur.lastPricePos,
+        momentum: parseFloat((cur.lastMomentum || 0).toFixed(3)),
+        count:    cur.count
+      };
+      candle15sStore[symbol].push(closed15s);
+      // Keep last 60 candles = 15 minutes of 15s data
+      if (candle15sStore[symbol].length > 60) candle15sStore[symbol].shift();
+    }
+    // ── Open new 15s bucket ──
+    current15sCandle[symbol] = {
+      bucket:       bucket15s,
+      sumSlope:     analysis.slopeFull,
+      lastRsi:      analysis.rsi,
+      lastStoch:    analysis.stoch,
+      lastPricePos: analysis.pricePos,
+      lastMomentum: analysis.momentum,
+      count:        1
+    };
+  } else {
+    // ── Accumulate into current bucket ──
+    cur.sumSlope     += analysis.slopeFull;
+    cur.lastRsi       = analysis.rsi;
+    cur.lastStoch     = analysis.stoch;
+    cur.lastPricePos  = analysis.pricePos;
+    cur.lastMomentum  = analysis.momentum;
+    cur.count++;
+  }
+}
+
 // ── 5-min candle store (display only) ─────────────────────────
 function update5mCandle(symbol, closedCandle1m) {
   const fiveMinMs  = 5 * 60000;
@@ -235,11 +288,16 @@ async function updateOTCPair(symbol) {
   svgHistoryStore[symbol].push(analysis);
   if (svgHistoryStore[symbol].length > 30) svgHistoryStore[symbol].shift();
 
+  // ── 15-second candle history ──────────────────────────────────
+  // Accumulates analysis objects into 15s buckets.
+  // Gives calc15sTrend() real micro-candle history to work with.
+  update15sCandle(symbol, analysis, Date.now());
+
   // ── Generate signal ──────────────────────────────────────────
-  // Pass svgHistory (for trend persistence) + closed 1-min candles
-  // (for reliable slope-based 5M HTF via calc5MinTrend).
-  const candles1m = candleStore[symbol];  // closed candles with slope
-  const result = calculateOTCSignal(symbol, svgHistoryStore[symbol], candles1m);
+  // Three timeframes: svgHistory (micro) + 15s candles + 1m candles (5M HTF)
+  const candles1m  = candleStore[symbol];       // closed 1m with slope
+  const candles15s = candle15sStore[symbol];    // closed 15s candles
+  const result = calculateOTCSignal(symbol, svgHistoryStore[symbol], candles1m, candles15s);
 
   lastSignals[symbol] = {
     ...result,
@@ -326,11 +384,12 @@ function getOTCState() {
       trend,
       currentPrice:  lastTick ? lastTick.price : null,
       recentPrices:  ticks.slice(-10).map(t => t.price),
-      // Candle counts
-      candleCount:   candleStore[symbol].length,
-      candle1mCount: candleStore[symbol].length,
-      candle5mCount: candles5m.length,
-      svgHistCount:  svgHist.length,
+      // Candle counts — all three timeframes
+      candleCount:    candleStore[symbol].length,
+      candle1mCount:  candleStore[symbol].length,
+      candle5mCount:  candles5m.length,
+      candle15sCount: candle15sStore[symbol].length,
+      svgHistCount:   svgHist.length,
       // Indicators (from SVG-native analysis — reliable)
       rsi:           sig.rsi,
       stoch:         sig.stoch,
@@ -366,6 +425,9 @@ function getOTCState() {
       q4Slope: sig.quads
                  ? parseFloat((sig.quads.q4 || 0).toFixed(3))
                  : (validLocked ? validLocked.q4Slope : 0),
+      // 15-second candle timeframe trend
+      trend15s:      sig.trend15s      || 'FLAT',
+      trend15sStrength: sig.trend15sStrength || 0,
       isOTC:      true,
       isCrypto:   symbol.toLowerCase().includes('btc') || symbol.toLowerCase().includes('eth')
     };

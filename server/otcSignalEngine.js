@@ -167,6 +167,51 @@ function analyzeCurrentFetch(pts) {
   };
 }
 
+// ── 15-Second candle trend ───────────────────────────────────────
+// Uses the rolling candle15sStore (closed 15s candles, each with a
+// reliable SVG slope).  Gives a micro-timeframe bias that sits between
+// the current SVG fetch analysis and the 5M HTF.
+//
+// Weight: most recent 4 candles (= last 1 minute of 15s data) matter
+// most — they show whether momentum is building or fading RIGHT NOW.
+function calc15sTrend(candles15s) {
+  if (!candles15s || candles15s.length < 4)
+    return { trend: 'FLAT', strength: 0, avgSlope: 0 };
+
+  // Use last 16 candles = last 4 minutes of 15s data
+  const recent  = candles15s.slice(-Math.min(16, candles15s.length));
+  const slopes  = recent.map(c => c.slope || 0);
+  const avgAll  = avg(slopes);
+  const avgLast = avg(slopes.slice(-4));  // last 4 × 15s = last 1 minute
+
+  let up = 0, dn = 0;
+  // Long window bias (4 minutes)
+  if (avgAll  >  0.2) up += 2; else if (avgAll  < -0.2) dn += 2;
+  // Short window (last 1 min) — higher weight for recency
+  if      (avgLast >  0.35) up += 3;
+  else if (avgLast >  0.15) up += 1;
+  if      (avgLast < -0.35) dn += 3;
+  else if (avgLast < -0.15) dn += 1;
+
+  // Directional candle count
+  const upCnt = slopes.filter(s => s >  0.1).length;
+  const dnCnt = slopes.filter(s => s < -0.1).length;
+  if (upCnt > dnCnt + 4) up += 2;
+  if (dnCnt > upCnt + 4) dn += 2;
+
+  // RSI from last closed 15s candle (micro oversold/overbought)
+  const lastC = recent[recent.length - 1];
+  if (lastC && lastC.rsi != null) {
+    if      (lastC.rsi < 30) up += 1;
+    else if (lastC.rsi > 70) dn += 1;
+  }
+
+  const strength = Math.abs(up - dn);
+  if (up > dn && strength >= 2) return { trend: 'UP',   strength, avgSlope: avgAll };
+  if (dn > up && strength >= 2) return { trend: 'DOWN', strength, avgSlope: avgAll };
+  return { trend: 'FLAT', strength: 0, avgSlope: avgAll };
+}
+
 // ── 5-Min HTF using stored 1-min candle slopes ───────────────────
 // Each closed 1-min candle stores the SVG slope from its final tick
 // (computed within one SVG fetch → reliable).  Using those slopes
@@ -198,7 +243,7 @@ function calc5MinTrend(candles1m) {
 }
 
 // ── Core signal from current SVG analysis ───────────────────────
-function calcRawSignal(analysis, svgHistory, candles1m) {
+function calcRawSignal(analysis, svgHistory, candles1m, candles15s) {
   if (!analysis) {
     return { signal: 'WAIT', confidence: 0, reason: 'Collecting SVG data...',
              votes: { up: 0, dn: 0, total: 0, margin: 0 }, reasons: [] };
@@ -301,6 +346,22 @@ function calcRawSignal(analysis, svgHistory, candles1m) {
     if (acc < -0.5 && dn > up) { dn += 1; reasons.push('Close accel DN'); }
   }
 
+  // ── 11. 15-SECOND CANDLE TREND (micro timeframe) ────────────
+  // Closed 15s candles give real historical momentum data.
+  // Triple-alignment: when 5M + 1M momentum + 15s micro ALL agree
+  // → highest confidence tier with a stacking bonus.
+  const trend15s = calc15sTrend(candles15s);
+  let t15Boost = 0;
+  if (trend15s.trend !== 'FLAT') {
+    if (trend15s.trend === 'UP'   && up  > dn) { up += 2; reasons.push('15s micro UP'); t15Boost = 2; }
+    if (trend15s.trend === 'DOWN' && dn  > up) { dn += 2; reasons.push('15s micro DN'); t15Boost = 2; }
+    // Triple alignment: 5M + current 1M + 15s micro all same direction
+    const tripleUp = htf.trend === 'UP'   && trend15s.trend === 'UP'   && up > dn;
+    const tripleDown = htf.trend === 'DOWN' && trend15s.trend === 'DOWN' && dn > up;
+    if (tripleUp)   { up += 3; reasons.push('✅ 5M+1M+15s ALL UP'); }
+    if (tripleDown) { dn += 3; reasons.push('✅ 5M+1M+15s ALL DN'); }
+  }
+
   // ── Decision ─────────────────────────────────────────────────
   const total  = up + dn;
   const margin = Math.abs(up - dn);
@@ -322,21 +383,23 @@ function calcRawSignal(analysis, svgHistory, candles1m) {
   }
 
   return {
-    signal:      rawSignal,
-    confidence:  rawConf,
+    signal:          rawSignal,
+    confidence:      rawConf,
     rsi,
-    stoch:       analysis.stoch,
-    wr:          analysis.wr,
-    bbPos:       analysis.bb.pos,
-    bbSqueeze:   analysis.bb.squeeze,
-    emaTrend:    sf >  0.2 ? 'bullish' : sf < -0.2 ? 'bearish' : 'neutral',
-    sweep:       analysis.sweep ? analysis.sweep.type : null,
-    htfTrend:    htf.trend,
-    htfStrength: htf.strength,
-    htfBlocked:  htfBlock,
-    votes:       { up, dn, total, margin },
-    reasons:     reasons.slice(0, 8),
-    quads:       analysis.quads || null
+    stoch:           analysis.stoch,
+    wr:              analysis.wr,
+    bbPos:           analysis.bb.pos,
+    bbSqueeze:       analysis.bb.squeeze,
+    emaTrend:        sf >  0.2 ? 'bullish' : sf < -0.2 ? 'bearish' : 'neutral',
+    sweep:           analysis.sweep ? analysis.sweep.type : null,
+    htfTrend:        htf.trend,
+    htfStrength:     htf.strength,
+    htfBlocked:      htfBlock,
+    trend15s:        trend15s.trend,
+    trend15sStrength:trend15s.strength,
+    votes:           { up, dn, total, margin },
+    reasons:         reasons.slice(0, 9),
+    quads:           analysis.quads || null
   };
 }
 
@@ -347,7 +410,7 @@ function calcRawSignal(analysis, svgHistory, candles1m) {
 const signalHistory = {};
 const confirmedSig  = {};
 
-function calculateOTCSignal(symbol, svgHistory, candles1m) {
+function calculateOTCSignal(symbol, svgHistory, candles1m, candles15s) {
   if (!signalHistory[symbol]) signalHistory[symbol] = [];
   if (!confirmedSig[symbol])
     confirmedSig[symbol] = { signal: 'WAIT', confidence: 0, isConfirmed: false };
@@ -357,7 +420,8 @@ function calculateOTCSignal(symbol, svgHistory, candles1m) {
     ? svgHistory[svgHistory.length - 1]
     : null;
 
-  const raw  = calcRawSignal(currentAnalysis, svgHistory, candles1m);
+  // Pass all three timeframes: SVG history, 1m candles (5M HTF), 15s candles
+  const raw  = calcRawSignal(currentAnalysis, svgHistory, candles1m, candles15s || []);
   const hist = signalHistory[symbol];
 
   // Push every tick — reliable because indicators use same-frame SVG data
@@ -414,4 +478,4 @@ function calculateOTCSignal(symbol, svgHistory, candles1m) {
   };
 }
 
-module.exports = { calculateOTCSignal, analyzeCurrentFetch, calc5MinTrend };
+module.exports = { calculateOTCSignal, analyzeCurrentFetch, calc5MinTrend, calc15sTrend };
