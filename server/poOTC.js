@@ -91,7 +91,9 @@ function buildCandleFromSVG(pts) {
 }
 
 // ── Update 1-min candle store ──────────────────────────────────
-function update1mCandle(symbol, pts, timestamp) {
+// svgSlope is the per-fetch reliable slope; stored in the candle so the
+// signal engine can use direction-based synthetic prices (Fix 3).
+function update1mCandle(symbol, pts, timestamp, svgSlope) {
   const ticks = tickHistory[symbol];
   const currentPrice = pts[pts.length - 1].price;
   ticks.push({ price: currentPrice, ts: timestamp });
@@ -106,7 +108,8 @@ function update1mCandle(symbol, pts, timestamp) {
       const closed1m = {
         time: new Date(c.minute).toISOString(),
         open: c.open, high: c.high, low: c.low, close: c.close,
-        volume: c.tickCount, minute: c.minute
+        volume: c.tickCount, minute: c.minute,
+        slope: parseFloat((c.slope || 0).toFixed(3))  // Fix 3: carry SVG slope
       };
       candleStore[symbol].push(closed1m);
       if (candleStore[symbol].length > 100) candleStore[symbol].shift();
@@ -122,7 +125,8 @@ function update1mCandle(symbol, pts, timestamp) {
       high:  svgC ? svgC.high : currentPrice,
       low:   svgC ? svgC.low  : currentPrice,
       close: currentPrice,
-      tickCount: 1
+      tickCount: 1,
+      slope: svgSlope || 0  // Fix 3: initialise with current fetch slope
     };
   } else {
     const svgC = buildCandleFromSVG(pts);
@@ -133,6 +137,7 @@ function update1mCandle(symbol, pts, timestamp) {
     }
     c.close = currentPrice;
     c.tickCount++;
+    if (svgSlope !== undefined) c.slope = svgSlope;  // Fix 3: keep slope fresh
   }
 }
 
@@ -194,7 +199,8 @@ function calcOTCSignal(symbol) {
   }
 
   const candles5m = get5mCandles(symbol);
-  return calculateOTCSignal(symbol, candles1m, candles5m);
+  // Pass current minute key so signal history only updates once per candle close
+  return calculateOTCSignal(symbol, candles1m, candles5m, Math.floor(Date.now() / 60000));
 }
 
 // ── Fetch one pair ─────────────────────────────────────────────
@@ -228,20 +234,23 @@ async function updateOTCPair(symbol) {
   const slopeDir = slope > 0.5 ? 'UP' : slope < -0.5 ? 'DOWN' : 'FLAT';
   lastSlopes[symbol] = { slope: parseFloat(slope.toFixed(3)), slopeDir, slopeStrong };
 
-  update1mCandle(symbol, pts, Date.now());
+  update1mCandle(symbol, pts, Date.now(), slope);
 
   // Recalculate signal every 2 ticks (reduce noise)
   if (updateCount % 2 === 0) {
     let result = calcOTCSignal(symbol);
 
-    // Live slope override — if SVG slope directly contradicts signal, or is flat, force WAIT
-    if (slopeDir === 'FLAT') {
-      result = { ...result, signal: 'WAIT', confidence: 0, isConfirmed: false };
-    } else if (
-      (slopeDir === 'UP'   && result.signal === 'SELL') ||
-      (slopeDir === 'DOWN' && result.signal === 'BUY')
-    ) {
-      result = { ...result, signal: 'WAIT', confidence: 0, isConfirmed: false };
+    // Live slope sanity check — only block an UNCONFIRMED signal when slope is
+    // very strongly opposing it (|slope| > 2.0). Never block a confirmed signal:
+    // confirmed means 3+ consecutive history entries agree, which outweighs a
+    // noisy short-term SVG slope that re-normalizes on every fetch.
+    if (!result.isConfirmed) {
+      if (
+        (slopeDir === 'UP'   && result.signal === 'SELL' && Math.abs(slope) > 2.0) ||
+        (slopeDir === 'DOWN' && result.signal === 'BUY'  && Math.abs(slope) > 2.0)
+      ) {
+        result = { ...result, signal: 'WAIT', confidence: 0, isConfirmed: false };
+      }
     }
 
     lastSignals[symbol] = {

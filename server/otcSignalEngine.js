@@ -99,6 +99,45 @@ function calcCCI(highs, lows, closes, period) {
   return parseFloat(((typical[typical.length - 1] - ma) / (0.015 * meanDev)).toFixed(1));
 }
 
+// ── Synthetic Price Series (Fix 3) ──────────────────────────────
+// po-static.com SVG data re-normalises its Y-axis to 0-100 on EVERY fetch.
+// That means candle OHLC "prices" from consecutive fetches are from different
+// normalisation frames — making RSI/EMA/MACD/BB meaningless when computed on
+// raw close values.
+//
+// Fix: build a synthetic cumulative price from the SLOPE stored in each
+// candle (which is computed from points WITHIN a single SVG fetch and is
+// therefore reliable).  Each candle's contribution is proportional to both
+// its slope direction and magnitude.  If no slope is stored (legacy candles)
+// we fall back to the candle body direction as a proxy.
+function buildSyntheticSeries(candles) {
+  const synthPrices = [];
+  const synthHighs  = [];
+  const synthLows   = [];
+  let p = 100;
+  for (const c of candles) {
+    let dir, strength;
+    if (c.slope !== undefined && c.slope !== null && c.slope !== 0) {
+      dir      = c.slope > 0 ? 1 : -1;
+      strength = Math.min(Math.abs(c.slope), 3);
+    } else {
+      // Fallback: use body direction as proxy (imperfect but better than raw price)
+      dir      = (c.close >= c.open) ? 1 : -1;
+      strength = 1;
+    }
+    const move = dir * (0.5 + strength * 0.5);
+    p += move;
+    // Synthetic wick: invert slightly based on body-to-range ratio
+    const range     = (c.high - c.low) || 1;
+    const bodyFrac  = Math.abs(c.close - c.open) / range;
+    const wickExtra = (1 - bodyFrac) * 0.4;
+    synthPrices.push(p);
+    synthHighs.push(p + wickExtra);
+    synthLows.push(p - wickExtra);
+  }
+  return { synthPrices, synthHighs, synthLows };
+}
+
 // ── Candle Pattern ──────────────────────────────────────────────
 function detectPattern(candles) {
   if (candles.length < 3) return { name: 'none', bias: 0 };
@@ -225,9 +264,9 @@ function calc5MinTrend(candles5m) {
 function calcRawSignal(candles, candles5m) {
   if (!candles || candles.length < 10) return { signal: 'WAIT', confidence: 0, reason: 'Building 1M data...' };
 
-  const closes = candles.map(c => c.close);
-  const highs  = candles.map(c => c.high);
-  const lows   = candles.map(c => c.low);
+  // Use direction-based synthetic prices so RSI/EMA/MACD/BB/Stoch are not
+  // corrupted by the per-fetch SVG re-normalisation (Fix 3).
+  const { synthPrices: closes, synthHighs: highs, synthLows: lows } = buildSyntheticSeries(candles);
   const n = closes.length;
 
   const slope10 = linSlope(closes.slice(-Math.min(10, n)));
@@ -374,17 +413,27 @@ function calcRawSignal(candles, candles5m) {
 }
 
 // ── Confirmation (3x same = confirmed) ─────────────────────────
-const signalHistory = {};
-const confirmedSig  = {};
+const signalHistory  = {};
+const confirmedSig   = {};
+const lastHistMinute = {};  // Fix 2: only push history once per 1-min candle close
 
-function calculateOTCSignal(symbol, candles1m, candles5m) {
+// minuteKey = Math.floor(Date.now() / 60000) — passed by caller so history
+// advances once per minute (not every 2-second tick).
+function calculateOTCSignal(symbol, candles1m, candles5m, minuteKey) {
   if (!signalHistory[symbol]) signalHistory[symbol] = [];
   if (!confirmedSig[symbol])  confirmedSig[symbol]  = { signal: 'WAIT', confidence: 0, isConfirmed: false };
 
   const raw  = calcRawSignal(candles1m, candles5m);
   const hist = signalHistory[symbol];
-  hist.push(raw.signal);
-  if (hist.length > 8) hist.shift();
+
+  // Only record a history entry when the minute advances (candle boundary).
+  // This prevents "3 same in a row" from triggering on 6 seconds of noise.
+  const mk = minuteKey !== undefined ? minuteKey : Math.floor(Date.now() / 60000);
+  if (lastHistMinute[symbol] !== mk) {
+    hist.push(raw.signal);
+    if (hist.length > 8) hist.shift();
+    lastHistMinute[symbol] = mk;
+  }
 
   const prev = confirmedSig[symbol];
 
