@@ -264,9 +264,18 @@ function calc5MinTrend(candles5m) {
 function calcRawSignal(candles, candles5m) {
   if (!candles || candles.length < 10) return { signal: 'WAIT', confidence: 0, reason: 'Building 1M data...' };
 
-  // Use direction-based synthetic prices so RSI/EMA/MACD/BB/Stoch are not
-  // corrupted by the per-fetch SVG re-normalisation (Fix 3).
-  const { synthPrices: closes, synthHighs: highs, synthLows: lows } = buildSyntheticSeries(candles);
+  // NOTE on Fix 3 (synthetic prices): buildSyntheticSeries() is correct in
+  // concept but requires candles that have a real `slope` field stored.
+  // Historical candles loaded into memory before the slope-storing code
+  // deployed all have slope=undefined, making the fallback (body direction)
+  // use cross-normalisation OHLC which creates contradictory RSI/EMA/MACD
+  // votes and keeps rawSignal stuck on WAIT.  We use raw closes here so
+  // indicators produce consistent directional readings.  Once enough new
+  // candles accumulate with real slope data, buildSyntheticSeries() can be
+  // re-enabled for full accuracy.
+  const closes = candles.map(c => c.close);
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
   const n = closes.length;
 
   const slope10 = linSlope(closes.slice(-Math.min(10, n)));

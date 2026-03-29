@@ -191,7 +191,8 @@ function calcOTCSignal(symbol) {
   const candles1m = [...candleStore[symbol]];
   if (currentCandle[symbol] && currentCandle[symbol].tickCount > 0) {
     const c = currentCandle[symbol];
-    candles1m.push({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.tickCount });
+    // Include slope so buildSyntheticSeries() works correctly for the forming candle
+    candles1m.push({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.tickCount, slope: c.slope || 0 });
   }
 
   if (candles1m.length < 10) {
@@ -295,7 +296,9 @@ function getOTCState() {
       trend,
       currentPrice: lastTick ? lastTick.price : null,
       candleCount: candleStore[symbol].length,
+      candle1mCount: candleStore[symbol].length,   // alias for UI compatibility
       candle5mCount: candles5m.length,
+      votes: signal.votes || null,
       recentPrices: ticks.slice(-10).map(t => t.price),
       rsi: signal.rsi,
       stoch: signal.stoch,
