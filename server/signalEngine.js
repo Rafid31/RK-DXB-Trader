@@ -1,18 +1,49 @@
-// ============================================================
-// RK DXB Trader — Signal Engine
-// Real market logic: 10 indicators + candle patterns
-// ============================================================
+// ================================================================
+// RK DXB Trader — Real Market Signal Engine v2.0
+//
+// CORE INSIGHT (v2.0 rewrite):
+// v1.0 treated RSI < 30 as a strong BUY (+4 votes) regardless of
+// trend — classic reversal thinking. On 1-minute real forex, this
+// is WRONG most of the time: oversold can get more oversold in a
+// trend. Meanwhile the EMA bias was only +2 votes — much too weak.
+//
+// v2.0 APPROACH — MOMENTUM + TREND ALIGNMENT:
+//   For real forex 1-minute prediction the correct hierarchy is:
+//
+//   TIER 1 — EMA Trend (primary, 4-6 pts)
+//     · Price vs EMA8/EMA21 → direction
+//     · EMA8 slope (is momentum accelerating?)
+//     · EMA8 > EMA21 cross state
+//
+//   TIER 2 — Momentum Confirmation (2-3 pts each)
+//     · RSI DIRECTION (rising/falling), not just extremes
+//     · MACD histogram sign + crossover
+//     · Last 3-candle body direction majority
+//
+//   TIER 3 — Pattern / Candle Structure (1-2 pts)
+//     · Engulfing, pin bar, morning/evening star, marubozu
+//     · Consecutive streak continuation
+//
+//   TIER 4 — Mean Reversion Override
+//     · BB below lower + RSI < 25 → extreme oversold bounce
+//     · BB above upper + RSI > 75 → extreme overbought reversal
+//     · Fires ONLY at true extremes (not at every RSI 30)
+//
+// KEY RULES:
+//   · EMA trend is the primary filter — all other signals confirm it
+//   · RSI direction (rising vs falling) matters, not just the level
+//   · Mean reversion ONLY when BOTH BB extreme AND RSI extreme agree
+// ================================================================
+
+'use strict';
 
 // ── Helpers ─────────────────────────────────────────────────
-
-function avg(arr) {
-  return arr.reduce((s, v) => s + v, 0) / arr.length;
-}
-
+function avg(arr) { return arr.reduce((s, v) => s + v, 0) / arr.length; }
 function stddev(arr) {
   const m = avg(arr);
   return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
 }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // ── RSI(14) ─────────────────────────────────────────────────
 function calcRSI(closes, period = 14) {
@@ -31,7 +62,16 @@ function calcRSI(closes, period = 14) {
   }
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return parseFloat((100 - (100 / (1 + rs))).toFixed(1));
+}
+
+// RSI direction over last 3 bars (positive = rising)
+function rsiSlope(closes, period = 14) {
+  if (closes.length < period + 4) return 0;
+  const rsiNow  = calcRSI(closes);
+  const rsiPrev = calcRSI(closes.slice(0, -3));
+  if (rsiNow === null || rsiPrev === null) return 0;
+  return parseFloat((rsiNow - rsiPrev).toFixed(1));
 }
 
 // ── EMA ─────────────────────────────────────────────────────
@@ -43,6 +83,15 @@ function calcEMA(closes, period) {
     ema = closes[i] * k + ema * (1 - k);
   }
   return ema;
+}
+
+// EMA slope over last N bars (% change, scale-independent)
+function emaSlope(closes, period, bars = 5) {
+  if (closes.length < period + bars) return 0;
+  const now  = calcEMA(closes, period);
+  const prev = calcEMA(closes.slice(0, -bars), period);
+  if (!now || !prev || prev === 0) return 0;
+  return parseFloat(((now - prev) / prev * 100).toFixed(4));
 }
 
 // ── Bollinger Bands(20,2) ───────────────────────────────────
@@ -57,20 +106,24 @@ function calcBB(closes, period = 20) {
 // ── MACD(12,26,9) ───────────────────────────────────────────
 function calcMACD(closes) {
   if (closes.length < 35) return null;
-  const ema12 = calcEMA(closes, 12);
-  const ema26 = calcEMA(closes, 26);
-  if (!ema12 || !ema26) return null;
-  const macdLine = ema12 - ema26;
-  // Signal line = EMA9 of MACD values — approximate with last values
   const macdValues = [];
   for (let i = 26; i <= closes.length; i++) {
     const e12 = calcEMA(closes.slice(0, i), 12);
     const e26 = calcEMA(closes.slice(0, i), 26);
     if (e12 && e26) macdValues.push(e12 - e26);
   }
-  if (macdValues.length < 9) return { macd: macdLine, signal: null, hist: null };
-  const signal = calcEMA(macdValues, 9);
-  return { macd: macdLine, signal, hist: macdLine - signal };
+  if (macdValues.length < 9) return null;
+  const macdLine = macdValues[macdValues.length - 1];
+  const signal   = calcEMA(macdValues, 9);
+  const hist     = signal ? macdLine - signal : null;
+  // Histogram slope: is momentum strengthening or weakening?
+  let histPrev = null;
+  if (macdValues.length >= 12) {
+    const mv2 = macdValues.slice(0, -3);
+    const s2  = calcEMA(mv2, 9);
+    if (s2) histPrev = mv2[mv2.length - 1] - s2;
+  }
+  return { macd: macdLine, signal, hist, histPrev };
 }
 
 // ── Stochastic(14,3) ────────────────────────────────────────
@@ -78,303 +131,267 @@ function calcStoch(highs, lows, closes, kPeriod = 14, dPeriod = 3) {
   if (closes.length < kPeriod + dPeriod) return null;
   const kValues = [];
   for (let i = kPeriod - 1; i < closes.length; i++) {
-    const slice_h = highs.slice(i - kPeriod + 1, i + 1);
-    const slice_l = lows.slice(i - kPeriod + 1, i + 1);
-    const highest = Math.max(...slice_h);
-    const lowest = Math.min(...slice_l);
-    if (highest === lowest) { kValues.push(50); continue; }
-    kValues.push(((closes[i] - lowest) / (highest - lowest)) * 100);
+    const high  = Math.max(...highs.slice(i - kPeriod + 1, i + 1));
+    const low   = Math.min(...lows.slice(i - kPeriod + 1, i + 1));
+    const range = high - low;
+    kValues.push(range === 0 ? 50 : ((closes[i] - low) / range) * 100);
   }
-  const k = avg(kValues.slice(-dPeriod));
-  const d = kValues.length >= dPeriod * 2
-    ? avg(kValues.slice(-dPeriod * 2, -dPeriod))
-    : k;
-  return { k, d };
+  const dValues = [];
+  for (let i = dPeriod - 1; i < kValues.length; i++) {
+    dValues.push(avg(kValues.slice(i - dPeriod + 1, i + 1)));
+  }
+  const k     = kValues[kValues.length - 1];
+  const d     = dValues[dValues.length - 1];
+  const kPrev = kValues.length > 3 ? kValues[kValues.length - 4] : k;
+  return { k: parseFloat(k.toFixed(1)), d: parseFloat(d.toFixed(1)), kPrev };
 }
 
-// ── Williams %R(14) ─────────────────────────────────────────
-function calcWR(highs, lows, closes, period = 14) {
-  if (closes.length < period) return null;
-  const h = Math.max(...highs.slice(-period));
-  const l = Math.min(...lows.slice(-period));
-  if (h === l) return -50;
-  return ((h - closes[closes.length - 1]) / (h - l)) * -100;
+// ── EMA Trend System ─────────────────────────────────────────
+function emaTrend(closes) {
+  const ema8   = calcEMA(closes, 8);
+  const ema21  = calcEMA(closes, 21);
+  const ema55  = calcEMA(closes, 55);
+  const price  = closes[closes.length - 1];
+  const slope8 = emaSlope(closes, 8,  4);
+  const slope21= emaSlope(closes, 21, 6);
+
+  if (!ema8 || !ema21) return { bias: 0, trend: 'neutral', score: 0, slope8: 0, slope21: 0 };
+
+  let score = 0;
+  if (price > ema8)   score += 2; else score -= 2;
+  if (price > ema21)  score += 2; else score -= 2;
+  if (ema55 && price > ema55) score += 1; else if (ema55) score -= 1;
+  if (ema8  > ema21)  score += 3; else score -= 3;        // crossover = strongest
+  if (slope8  >  0.002) score += 1; else if (slope8  < -0.002) score -= 1;
+  if (slope21 >  0.001) score += 1; else if (slope21 < -0.001) score -= 1;
+
+  const bias  = score >= 3 ? 1 : score <= -3 ? -1 : 0;
+  const trend = bias === 1 ? 'bullish' : bias === -1 ? 'bearish' : 'neutral';
+  return { bias, trend, score, slope8, slope21, ema8, ema21 };
 }
 
-// ── CCI(20) ─────────────────────────────────────────────────
-function calcCCI(highs, lows, closes, period = 20) {
-  if (closes.length < period) return null;
-  const typical = closes.map((c, i) => (highs[i] + lows[i] + c) / 3);
-  const slice = typical.slice(-period);
-  const m = avg(slice);
-  const meanDev = avg(slice.map(v => Math.abs(v - m)));
-  if (meanDev === 0) return 0;
-  return (slice[slice.length - 1] - m) / (0.015 * meanDev);
+// ── Recent 3 candle body bias ────────────────────────────────
+function recentBodyBias(candles, n = 3) {
+  const last = candles.slice(-n);
+  let up = 0, dn = 0;
+  for (const c of last) {
+    if (c.close > c.open) up++;
+    else if (c.close < c.open) dn++;
+  }
+  if (up === n) return { bias:  1, label: `${n}/${n} bullish candles` };
+  if (dn === n) return { bias: -1, label: `${n}/${n} bearish candles` };
+  if (up > dn)  return { bias:  0.5, label: `${up}/${n} bullish candles` };
+  if (dn > up)  return { bias: -0.5, label: `${dn}/${n} bearish candles` };
+  return { bias: 0, label: 'mixed candles' };
 }
 
-// ── Candle Pattern Detection ─────────────────────────────────
+// ── Streak ──────────────────────────────────────────────────
+function calcStreak(candles) {
+  const last6 = candles.slice(-6);
+  let bull = 0, bear = 0;
+  for (let i = last6.length - 1; i >= 0; i--) {
+    const c = last6[i];
+    if (c.close > c.open) { if (bear > 0) break; bull++; }
+    else { if (bull > 0) break; bear++; }
+  }
+  return bull > 0 ? bull : -bear;
+}
+
+// ── Candle pattern ──────────────────────────────────────────
 function detectPattern(candles) {
   if (candles.length < 3) return { name: 'none', bias: 0 };
-  const c = candles[candles.length - 1]; // current
-  const p = candles[candles.length - 2]; // previous
-  const p2 = candles[candles.length - 3]; // 2 bars ago
+  const c  = candles[candles.length - 1];
+  const p1 = candles[candles.length - 2];
+  const p2 = candles[candles.length - 3];
 
-  const body = Math.abs(c.close - c.open);
-  const range = c.high - c.low;
-  const bodyRatio = range > 0 ? body / range : 0;
-  const upperWick = c.high - Math.max(c.open, c.close);
-  const lowerWick = Math.min(c.open, c.close) - c.low;
+  const range     = c.high - c.low || 0.0001;
+  const body      = Math.abs(c.close - c.open);
+  const bodyRatio = body / range;
+  const upperWick = c.high  - Math.max(c.close, c.open);
+  const lowerWick = Math.min(c.close, c.open) - c.low;
   const isBullish = c.close > c.open;
   const isBearish = c.close < c.open;
-  const pBullish = p.close > p.open;
-  const pBearish = p.close < p.open;
-  const pBody = Math.abs(p.close - p.open);
-
-  // Doji
-  if (bodyRatio < 0.1) return { name: 'doji', bias: 0 };
-
-  // Hammer (bullish reversal) — small body top, long lower wick
-  if (lowerWick > body * 2 && upperWick < body * 0.5 && isBullish)
-    return { name: 'hammer', bias: 1 };
-
-  // Shooting Star (bearish reversal) — small body bottom, long upper wick
-  if (upperWick > body * 2 && lowerWick < body * 0.5 && isBearish)
-    return { name: 'shooting_star', bias: -1 };
+  const p1Body    = Math.abs(p1.close - p1.open);
 
   // Bullish Engulfing
-  if (pBearish && isBullish && c.open < p.close && c.close > p.open && body > pBody)
+  if (p1.close < p1.open && isBullish && c.open < p1.close && c.close > p1.open)
     return { name: 'bullish_engulfing', bias: 2 };
 
   // Bearish Engulfing
-  if (pBullish && isBearish && c.open > p.close && c.close < p.open && body > pBody)
+  if (p1.close > p1.open && isBearish && c.open > p1.close && c.close < p1.open)
     return { name: 'bearish_engulfing', bias: -2 };
 
-  // Bullish Pin Bar
-  if (lowerWick > range * 0.6 && body < range * 0.3)
-    return { name: 'pin_bar_bull', bias: 1 };
+  // Bullish Pin Bar / Hammer
+  if (lowerWick > range * 0.55 && body < range * 0.35 && upperWick < range * 0.15)
+    return { name: 'pin_bar_bull', bias: 2 };
 
-  // Bearish Pin Bar
-  if (upperWick > range * 0.6 && body < range * 0.3)
-    return { name: 'pin_bar_bear', bias: -1 };
+  // Bearish Pin Bar / Shooting Star
+  if (upperWick > range * 0.55 && body < range * 0.35 && lowerWick < range * 0.15)
+    return { name: 'pin_bar_bear', bias: -2 };
 
-  // Morning Star (3-candle bullish reversal)
-  const p2Bearish = p2.close < p2.open;
-  if (p2Bearish && bodyRatio < 0.3 && isBullish && c.close > (p2.open + p2.close) / 2)
+  // Bullish Marubozu (strong momentum UP)
+  if (isBullish && bodyRatio > 0.80 && body > p1Body * 1.2)
+    return { name: 'bull_marubozu', bias: 1 };
+
+  // Bearish Marubozu (strong momentum DN)
+  if (isBearish && bodyRatio > 0.80 && body > p1Body * 1.2)
+    return { name: 'bear_marubozu', bias: -1 };
+
+  // Morning Star
+  const p1Range = p1.high - p1.low || 0.0001;
+  if (p2.close < p2.open && Math.abs(p1.close - p1.open) / p1Range < 0.3
+      && isBullish && c.close > (p2.open + p2.close) / 2)
     return { name: 'morning_star', bias: 2 };
 
-  // Evening Star (3-candle bearish reversal)
-  const p2Bullish = p2.close > p2.open;
-  if (p2Bullish && bodyRatio < 0.3 && isBearish && c.close < (p2.open + p2.close) / 2)
+  // Evening Star
+  if (p2.close > p2.open && Math.abs(p1.close - p1.open) / p1Range < 0.3
+      && isBearish && c.close < (p2.open + p2.close) / 2)
     return { name: 'evening_star', bias: -2 };
 
   return { name: 'none', bias: 0 };
 }
 
-// ── Multi-Candle Logic ───────────────────────────────────────
-function multiCandleAnalysis(candles) {
-  if (candles.length < 6) return { streak: 0, reversal: false, bias: 0 };
-
-  const last6 = candles.slice(-6);
-  let bullStreak = 0, bearStreak = 0;
-
-  for (let i = last6.length - 1; i >= 0; i--) {
-    const c = last6[i];
-    if (c.close > c.open) {
-      if (bearStreak > 0) break;
-      bullStreak++;
-    } else {
-      if (bullStreak > 0) break;
-      bearStreak++;
-    }
-  }
-
-  const streak = bullStreak || bearStreak;
-  const isBull = bullStreak > 0;
-
-  // 3+ same candles = trend continuation
-  // 5+ same candles = REVERSAL warning
-  let bias = 0;
-  let reversal = false;
-
-  if (streak >= 5) {
-    reversal = true;
-    bias = isBull ? -1 : 1; // extreme = reverse
-  } else if (streak >= 3) {
-    bias = isBull ? 1 : -1; // trend continuing
-  }
-
-  return { streak: isBull ? streak : -streak, reversal, bias };
-}
-
-// ── Volume Analysis ──────────────────────────────────────────
-function volumeAnalysis(volumes) {
-  if (volumes.length < 10) return { bias: 0, aboveAvg: false };
-  // Filter out zeros (forex often has 0 volume from API)
-  const nonZero = volumes.filter(v => v > 0);
-  if (nonZero.length < 5) return { bias: 0, aboveAvg: false };
-  const recent = nonZero[nonZero.length - 1];
-  const avgVol = avg(nonZero.slice(-20));
-  const aboveAvg = recent > avgVol * 1.2;
-  return { bias: aboveAvg ? 1 : 0, aboveAvg };
-}
-
-// ── EMA Trend System ─────────────────────────────────────────
-function emaTrend(closes) {
-  const ema8 = calcEMA(closes, 8);
-  const ema21 = calcEMA(closes, 21);
-  const ema55 = calcEMA(closes, 55);
-  const ema200 = calcEMA(closes, 200);
-  const price = closes[closes.length - 1];
-
-  if (!ema8 || !ema21) return { bias: 0, trend: 'neutral', emas: {} };
-
-  let score = 0;
-  if (price > ema8) score++;
-  if (price > ema21) score++;
-  if (ema55 && price > ema55) score++;
-  if (ema200 && price > ema200) score++;
-  if (ema8 > ema21) score++;
-
-  const bias = score >= 3 ? 1 : score <= 1 ? -1 : 0;
-  const trend = bias === 1 ? 'bullish' : bias === -1 ? 'bearish' : 'neutral';
-
-  return { bias, trend, score, emas: { ema8, ema21, ema55, ema200 } };
-}
-
-// ── MAIN SIGNAL CALCULATOR ──────────────────────────────────
+// ── MAIN SIGNAL CALCULATOR v2.0 ─────────────────────────────
 function calculateSignal(candles) {
   if (!candles || candles.length < 30) {
     return { signal: 'WAIT', confidence: 0, reason: 'Not enough data' };
   }
 
   const closes = candles.map(c => c.close);
-  const highs = candles.map(c => c.high);
-  const lows = candles.map(c => c.low);
-  const volumes = candles.map(c => c.volume || 0);
+  const highs  = candles.map(c => c.high);
+  const lows   = candles.map(c => c.low);
+  const price  = closes[closes.length - 1];
 
   // Calculate all indicators
-  const rsi = calcRSI(closes);
-  const bb = calcBB(closes);
-  const macd = calcMACD(closes);
-  const stoch = calcStoch(highs, lows, closes);
-  const wr = calcWR(highs, lows, closes);
-  const cci = calcCCI(highs, lows, closes);
+  const rsi     = calcRSI(closes);
+  const rsiDir  = rsiSlope(closes);
+  const bb      = calcBB(closes);
+  const macd    = calcMACD(closes);
+  const stoch   = calcStoch(highs, lows, closes);
+  const ema     = emaTrend(closes);
   const pattern = detectPattern(candles);
-  const multiCandle = multiCandleAnalysis(candles);
-  const volume = volumeAnalysis(volumes);
-  const ema = emaTrend(closes);
+  const body3   = recentBodyBias(candles, 3);
+  const str     = calcStreak(candles);
 
-  let upVotes = 0, downVotes = 0;
+  let up = 0, dn = 0;
   const reasons = [];
 
-  // ── RSI vote ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════
+  // TIER 1 — EMA TREND (primary)
+  // ════════════════════════════════════════════════════════
+  if      (ema.score >= 6)  { up += 6; reasons.push('Strong EMA bullish stack'); }
+  else if (ema.score >= 3)  { up += 4; reasons.push('EMA bullish'); }
+  else if (ema.score >= 1)  { up += 2; }
+  else if (ema.score <= -6) { dn += 6; reasons.push('Strong EMA bearish stack'); }
+  else if (ema.score <= -3) { dn += 4; reasons.push('EMA bearish'); }
+  else if (ema.score <= -1) { dn += 2; }
+
+  // EMA8 slope acceleration
+  if      (ema.slope8 >  0.008) { up += 2; reasons.push('EMA8 accelerating UP'); }
+  else if (ema.slope8 >  0.003) { up += 1; }
+  else if (ema.slope8 < -0.008) { dn += 2; reasons.push('EMA8 accelerating DN'); }
+  else if (ema.slope8 < -0.003) { dn += 1; }
+
+  // ════════════════════════════════════════════════════════
+  // TIER 2 — MOMENTUM CONFIRMATION
+  // ════════════════════════════════════════════════════════
+
+  // RSI direction (v2.0 key change)
   if (rsi !== null) {
-    if (rsi < 20) { upVotes += 4; reasons.push(`RSI extreme oversold ${rsi.toFixed(1)}`); }
-    else if (rsi < 30) { upVotes += 2; reasons.push(`RSI oversold ${rsi.toFixed(1)}`); }
-    else if (rsi < 40) { upVotes += 1; reasons.push(`RSI low ${rsi.toFixed(1)}`); }
-    else if (rsi < 45) { upVotes += 1; reasons.push(`RSI weak low ${rsi.toFixed(1)}`); }
-    else if (rsi > 80) { downVotes += 4; reasons.push(`RSI extreme overbought ${rsi.toFixed(1)}`); }
-    else if (rsi > 70) { downVotes += 2; reasons.push(`RSI overbought ${rsi.toFixed(1)}`); }
-    else if (rsi > 60) { downVotes += 1; reasons.push(`RSI high ${rsi.toFixed(1)}`); }
-    else if (rsi > 55) { downVotes += 1; reasons.push(`RSI weak high ${rsi.toFixed(1)}`); }
+    if      (rsi > 55 && rsiDir >  3) { up += 3; reasons.push(`RSI ${rsi} rising`); }
+    else if (rsi > 50 && rsiDir >  1) { up += 2; }
+    else if (rsi > 50)                 { up += 1; }
+    if      (rsi < 45 && rsiDir < -3) { dn += 3; reasons.push(`RSI ${rsi} falling`); }
+    else if (rsi < 50 && rsiDir < -1) { dn += 2; }
+    else if (rsi < 50)                 { dn += 1; }
   }
 
-  // ── EMA vote ────────────────────────────────────────────────
-  if (ema.bias === 1) { upVotes += 2; reasons.push('EMA bullish stack'); }
-  else if (ema.bias === -1) { downVotes += 2; reasons.push('EMA bearish stack'); }
-
-  // ── BB vote ─────────────────────────────────────────────────
-  if (bb) {
-    const price = closes[closes.length - 1];
-    if (price < bb.lower) { upVotes += 1; reasons.push('Below BB lower'); }
-    else if (price > bb.upper) { downVotes += 1; reasons.push('Above BB upper'); }
-    // BB squeeze = low volatility, breakout coming
-    if (bb.width < 0.005) { reasons.push('BB squeeze'); }
-  }
-
-  // ── MACD vote ────────────────────────────────────────────────
+  // MACD histogram
   if (macd && macd.hist !== null) {
-    if (macd.hist > 0 && macd.macd > 0) { upVotes += 1; reasons.push('MACD bullish'); }
-    else if (macd.hist < 0 && macd.macd < 0) { downVotes += 1; reasons.push('MACD bearish'); }
-    // Crossover (stronger signal)
-    if (macd.hist > 0 && macd.signal < 0) { upVotes += 1; reasons.push('MACD crossover up'); }
-    if (macd.hist < 0 && macd.signal > 0) { downVotes += 1; reasons.push('MACD crossover dn'); }
+    if (macd.hist > 0 && macd.histPrev !== null && macd.hist > macd.histPrev) {
+      up += 3; reasons.push('MACD momentum UP');
+    } else if (macd.hist > 0) { up += 1; }
+    if (macd.hist < 0 && macd.histPrev !== null && macd.hist < macd.histPrev) {
+      dn += 3; reasons.push('MACD momentum DN');
+    } else if (macd.hist < 0) { dn += 1; }
+    if (macd.macd > 0) up += 1; else if (macd.macd < 0) dn += 1;
   }
 
-  // ── Stochastic vote ──────────────────────────────────────────
+  // Stochastic direction
   if (stoch) {
-    if (stoch.k < 20 && stoch.k > stoch.d) { upVotes += 1; reasons.push('Stoch oversold+cross'); }
-    else if (stoch.k < 20) { upVotes += 1; reasons.push('Stoch oversold'); }
-    else if (stoch.k > 80 && stoch.k < stoch.d) { downVotes += 1; reasons.push('Stoch overbought+cross'); }
-    else if (stoch.k > 80) { downVotes += 1; reasons.push('Stoch overbought'); }
+    const rising  = stoch.k > stoch.kPrev;
+    const falling = stoch.k < stoch.kPrev;
+    if      (stoch.k > 50 && rising  && stoch.k > stoch.d) { up += 2; reasons.push('Stoch bullish'); }
+    else if (stoch.k > 50)                                   { up += 1; }
+    if      (stoch.k < 50 && falling && stoch.k < stoch.d) { dn += 2; reasons.push('Stoch bearish'); }
+    else if (stoch.k < 50)                                   { dn += 1; }
   }
 
-  // ── Williams %R vote ─────────────────────────────────────────
-  if (wr !== null) {
-    if (wr < -80) { upVotes += 1; reasons.push('W%R oversold'); }
-    else if (wr > -20) { downVotes += 1; reasons.push('W%R overbought'); }
+  // Recent 3 candle bodies
+  if      (body3.bias >=  1) { up += 3; reasons.push(body3.label); }
+  else if (body3.bias >   0) { up += 1; }
+  else if (body3.bias <= -1) { dn += 3; reasons.push(body3.label); }
+  else if (body3.bias <   0) { dn += 1; }
+
+  // ════════════════════════════════════════════════════════
+  // TIER 3 — CANDLE PATTERN & STREAK
+  // ════════════════════════════════════════════════════════
+  if (pattern.bias > 0)  { up += pattern.bias; reasons.push(`Pattern: ${pattern.name}`); }
+  if (pattern.bias < 0)  { dn += Math.abs(pattern.bias); reasons.push(`Pattern: ${pattern.name}`); }
+
+  // Streak continuation (real markets trend)
+  if      (str >= 4)  { up += 2; reasons.push(`${str} candle bull streak`); }
+  else if (str >= 2)  { up += 1; }
+  else if (str <= -4) { dn += 2; reasons.push(`${Math.abs(str)} candle bear streak`); }
+  else if (str <= -2) { dn += 1; }
+
+  // ════════════════════════════════════════════════════════
+  // TIER 4 — EXTREME MEAN REVERSION OVERRIDE
+  // ════════════════════════════════════════════════════════
+  if (bb) {
+    if (price < bb.lower && rsi !== null && rsi < 25) {
+      up += 5; dn = Math.max(0, dn - 3);
+      reasons.push(`Extreme oversold: BB+RSI ${rsi}`);
+    }
+    if (price > bb.upper && rsi !== null && rsi > 75) {
+      dn += 5; up = Math.max(0, up - 3);
+      reasons.push(`Extreme overbought: BB+RSI ${rsi}`);
+    }
   }
 
-  // ── CCI vote ─────────────────────────────────────────────────
-  if (cci !== null) {
-    if (cci < -100) { upVotes += 1; reasons.push(`CCI oversold ${cci.toFixed(0)}`); }
-    else if (cci > 100) { downVotes += 1; reasons.push(`CCI overbought ${cci.toFixed(0)}`); }
-  }
+  // ════════════════════════════════════════════════════════
+  // DECISION
+  // ════════════════════════════════════════════════════════
+  const total  = up + dn;
+  const margin = Math.abs(up - dn);
+  const upPct  = total > 0 ? (up / total) * 100 : 50;
+  const thresh = total >= 14 ? 55 : total >= 10 ? 58 : 62;
 
-  // ── Candle Pattern vote ──────────────────────────────────────
-  if (pattern.bias !== 0) {
-    if (pattern.bias > 0) { upVotes += pattern.bias; reasons.push(`Pattern: ${pattern.name}`); }
-    else { downVotes += Math.abs(pattern.bias); reasons.push(`Pattern: ${pattern.name}`); }
-  }
-
-  // ── Multi-candle vote ────────────────────────────────────────
-  if (multiCandle.reversal) {
-    if (multiCandle.bias === 1) { upVotes += 2; reasons.push(`Reversal after ${Math.abs(multiCandle.streak)} reds`); }
-    else if (multiCandle.bias === -1) { downVotes += 2; reasons.push(`Reversal after ${multiCandle.streak} greens`); }
-  } else if (multiCandle.bias !== 0) {
-    if (multiCandle.bias === 1) { upVotes += 1; reasons.push(`${multiCandle.streak} candle bull streak`); }
-    else { downVotes += 1; reasons.push(`${Math.abs(multiCandle.streak)} candle bear streak`); }
-  }
-
-  // ── Volume vote ──────────────────────────────────────────────
-  if (volume.aboveAvg) {
-    // Volume confirms the direction
-    if (upVotes > downVotes) { upVotes += 1; reasons.push('High volume confirms UP'); }
-    else if (downVotes > upVotes) { downVotes += 1; reasons.push('High volume confirms DN'); }
-  }
-
-  // ── Decision ─────────────────────────────────────────────────
-  const totalVotes = upVotes + downVotes;
-  const maxVotes = 20; // max possible
-  const upPct = totalVotes > 0 ? (upVotes / (upVotes + downVotes)) * 100 : 50;
-
-  // Need at least 3 total votes and clear majority (60%+)
-  let signal = 'WAIT';
-  let confidence = 0;
-
-  if (totalVotes >= 3 && upPct >= 60) {
-    signal = 'BUY';
-    confidence = Math.min(95, Math.round(50 + (upPct - 50) * 1.5));
-  } else if (totalVotes >= 3 && upPct <= 40) {
-    signal = 'SELL';
-    confidence = Math.min(95, Math.round(50 + (50 - upPct) * 1.5));
+  let signal = 'WAIT', confidence = 0;
+  if (total >= 6 && upPct >= thresh) {
+    signal     = 'BUY';
+    confidence = clamp(50 + margin * 2.5, 52, 92);
+  } else if (total >= 6 && upPct <= (100 - thresh)) {
+    signal     = 'SELL';
+    confidence = clamp(50 + margin * 2.5, 52, 92);
   }
 
   return {
     signal,
     confidence,
-    upVotes,
-    downVotes,
-    rsi: rsi ? +rsi.toFixed(1) : null,
-    stoch: stoch ? +stoch.k.toFixed(1) : null,
-    macd: macd ? (macd.hist !== null ? (macd.hist > 0 ? 'UP' : 'DN') : null) : null,
-    wr: wr !== null ? +wr.toFixed(1) : null,
-    cci: cci !== null ? +cci.toFixed(1) : null,
-    bbPos: bb ? (closes[closes.length - 1] < bb.lower ? 'BELOW' : closes[closes.length - 1] > bb.upper ? 'ABOVE' : 'MID') : null,
-    emaTrend: ema.trend,
-    pattern: pattern.name,
-    streak: multiCandle.streak,
-    reasons: reasons.slice(0, 5)
+    upVotes:   up,
+    downVotes: dn,
+    rsi,
+    rsiDir:    rsiDir,
+    stoch:     stoch ? stoch.k : null,
+    macd:      macd  ? (macd.hist !== null ? (macd.hist > 0 ? 'UP' : 'DN') : null) : null,
+    wr:        null,
+    cci:       null,
+    bbPos:     bb ? (price < bb.lower ? 'BELOW' : price > bb.upper ? 'ABOVE' : 'MID') : null,
+    emaTrend:  ema.trend,
+    pattern:   pattern.name,
+    streak:    str,
+    reasons:   reasons.slice(0, 5)
   };
 }
 
