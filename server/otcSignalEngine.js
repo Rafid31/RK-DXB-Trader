@@ -427,11 +427,12 @@ function calcRawSignal(analysis, svgHistory, candles1m, candles15s) {
   if      (sf < -0.4 && q4 >  0.3) { up += 5; reasons.push('Q4 reversal UP (was DN)'); }
   else if (sf < -0.2 && q4 >  0.2) { up += 3; reasons.push('Q4 momentum shift UP'); }
 
-  // Q4 continuation (candle finishing strongly)
-  if      (q4 >  0.7 && sf >  0.3) { up += 2; reasons.push('Strong Q4 close UP'); }
-  else if (q4 >  0.4 && sf >  0.2) { up += 1; }
-  if      (q4 < -0.7 && sf < -0.3) { dn += 2; reasons.push('Strong Q4 close DN'); }
-  else if (q4 < -0.4 && sf < -0.2) { dn += 1; }
+  // Q4 continuation — OTC MEAN-REVERSION: candle closing UP → NEXT candle likely reverses DOWN
+  // A strong UP close means this candle exhausted buyers → fade it
+  if      (q4 >  0.7 && sf >  0.3) { dn += 2; reasons.push('Strong close UP → OTC reversal'); }
+  else if (q4 >  0.4 && sf >  0.2) { dn += 1; }
+  if      (q4 < -0.7 && sf < -0.3) { up += 2; reasons.push('Strong close DN → OTC reversal'); }
+  else if (q4 < -0.4 && sf < -0.2) { up += 1; }
 
   // ── SIGNAL 6: CONSECUTIVE EXHAUSTION ─────────────────────────
   const { up: consecUp, dn: consecDn } = countConsecutive(candles1m);
@@ -472,35 +473,44 @@ function calcRawSignal(analysis, svgHistory, candles1m, candles15s) {
     const dn15 = h15.filter(h => h.slopeFull < -0.15).length;
     const up8  = h8.filter(h  => h.slopeFull >  0.10).length;
     const dn8  = h8.filter(h  => h.slopeFull < -0.10).length;
-    if      (up15 >= 11) { up += 2; reasons.push(`${up15}/15 fetches UP`); }
-    else if (up8  >=  6) { up += 1; }
-    if      (dn15 >= 11) { dn += 2; reasons.push(`${dn15}/15 fetches DN`); }
-    else if (dn8  >=  6) { dn += 1; }
+    // OTC MEAN-REVERSION: price has been UP for 60s → expect reversal DOWN; vice versa
+    if      (up15 >= 11) { dn += 2; reasons.push(`${up15}/15 fetches UP → fade`); }
+    else if (up8  >=  6) { dn += 1; }
+    if      (dn15 >= 11) { up += 2; reasons.push(`${dn15}/15 fetches DN → fade`); }
+    else if (dn8  >=  6) { up += 1; }
   }
 
   // ══════════════════════════════════════════════════════════════
   // TIER 3 — TIMEFRAME ALIGNMENT
   // ══════════════════════════════════════════════════════════════
   const htf = calc5MinTrend(candles1m);
-  let htfBoost = 0, htfBlock = false;
+  let htfBoost = 0;
+  // htfBlock REMOVED — never suppress OTC mean-reversion signals based on 5M trend
   if (htf.trend !== 'FLAT') {
     const goUp = up > dn, goDn = dn > up;
-    if (htf.trend === 'UP'   && goUp) { up += 3; htfBoost = 3; reasons.push('5M UP aligns'); }
-    if (htf.trend === 'DOWN' && goDn) { dn += 3; htfBoost = 3; reasons.push('5M DN aligns'); }
-    if (htf.trend === 'UP'   && goDn && !analysis.sweep) htfBlock = true;
-    if (htf.trend === 'DOWN' && goUp && !analysis.sweep) htfBlock = true;
+    // OTC EDGE: the real alpha is FADING the 5M trend (price exhausted after 5M run)
+    // 5M UP + we lean SELL = we're at top of 5M move = perfect reversal setup → +3 SELL
+    // 5M DN + we lean BUY  = we're at bottom of 5M move = perfect reversal setup → +3 BUY
+    if (htf.trend === 'UP'   && goDn) { dn += 3; htfBoost = 3; reasons.push('Fading 5M UP → SELL'); }
+    if (htf.trend === 'DOWN' && goUp) { up += 3; htfBoost = 3; reasons.push('Fading 5M DN → BUY'); }
+    // Going WITH the 5M trend = less mean-reversion edge, only small confirmation
+    if (htf.trend === 'UP'   && goUp) { up += 1; }
+    if (htf.trend === 'DOWN' && goDn) { dn += 1; }
   }
 
   const trend15s = calc15sTrend(candles15s);
   let hasTriple = false;
   if (trend15s.trend !== 'FLAT') {
+    // 15s micro confirms reversal is already in motion
     if (trend15s.trend === 'UP'   && up  > dn) { up += 2; reasons.push('15s micro UP'); }
     if (trend15s.trend === 'DOWN' && dn  > up) { dn += 2; reasons.push('15s micro DN'); }
-    if (htf.trend === 'UP'   && trend15s.trend === 'UP'   && up > dn) {
-      up += 3; hasTriple = true; reasons.push('✅ 5M+1M+15s ALL UP');
+    // OTC TRIPLE = fading 5M trend + 1M exhaustion + 15s reversal started = maximum edge
+    // 5M going UP, we lean SELL, 15s is ALREADY turning DOWN → triple fade confirmation
+    if (htf.trend === 'UP'   && dn > up && trend15s.trend === 'DOWN') {
+      dn += 3; hasTriple = true; reasons.push('✅ Triple fade: 5M↑ fading → SELL');
     }
-    if (htf.trend === 'DOWN' && trend15s.trend === 'DOWN' && dn > up) {
-      dn += 3; hasTriple = true; reasons.push('✅ 5M+1M+15s ALL DN');
+    if (htf.trend === 'DOWN' && up > dn && trend15s.trend === 'UP') {
+      up += 3; hasTriple = true; reasons.push('✅ Triple fade: 5M↓ fading → BUY');
     }
   }
 
@@ -531,11 +541,11 @@ function calcRawSignal(analysis, svgHistory, candles1m, candles15s) {
     (analysis.sweep !== null    && margin >= 3);            // sweep override
 
   let rawSignal = 'WAIT', rawConf = 0;
-  if (!htfBlock && strongEnough && up > dn) {
+  if (strongEnough && up > dn) {
     rawSignal = 'BUY';
     rawConf   = clamp(52 + margin * 3.5 + htfBoost + (hasTriple ? 5 : 0), 0, 93);
   }
-  if (!htfBlock && strongEnough && dn > up) {
+  if (strongEnough && dn > up) {
     rawSignal = 'SELL';
     rawConf   = clamp(52 + margin * 3.5 + htfBoost + (hasTriple ? 5 : 0), 0, 93);
   }
@@ -554,7 +564,7 @@ function calcRawSignal(analysis, svgHistory, candles1m, candles15s) {
     sweep:            analysis.sweep ? analysis.sweep.type : null,
     htfTrend:         htf.trend,
     htfStrength:      htf.strength,
-    htfBlocked:       htfBlock,
+    htfBlocked:       false,
     trend15s:         trend15s.trend,
     trend15sStrength: trend15s.strength,
     votes:            { up, dn, total, margin },
