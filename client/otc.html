@@ -339,6 +339,16 @@ body::before{content:'';position:fixed;inset:0;
 .card.confirmed-sell .signal-reveal.sell{animation:sellglow 1.5s ease infinite}
 @keyframes buyglow{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(0,230,118,0.35)}}
 @keyframes sellglow{0%,100%{box-shadow:none}50%{box-shadow:0 0 18px rgba(255,63,90,0.35)}}
+/* ═══ TRADE GRADE BADGE ═══ */
+.trade-grade{
+  display:inline-block;margin-top:5px;padding:3px 9px;border-radius:6px;
+  font-size:9px;font-family:var(--mono);font-weight:700;letter-spacing:1px;
+  text-transform:uppercase;border:1px solid transparent}
+.trade-grade.grade-Aplus{background:rgba(0,230,118,0.18);color:#00e676;border-color:rgba(0,230,118,0.45)}
+.trade-grade.grade-A{background:rgba(0,200,100,0.12);color:#00c864;border-color:rgba(0,200,100,0.35)}
+.trade-grade.grade-B{background:rgba(255,196,0,0.12);color:#ffc400;border-color:rgba(255,196,0,0.35)}
+.trade-grade.grade-C{background:rgba(255,120,0,0.10);color:#ff7800;border-color:rgba(255,120,0,0.3)}
+.trade-grade.grade-SKIP{background:rgba(100,100,120,0.10);color:var(--muted);border-color:var(--border)}
 </style>
 </head>
 <body>
@@ -803,12 +813,16 @@ function renderCard(p) {
   let revealBanner = '';
   if (!isAnalyzing) {
     if (showSig) {
+      const tg       = p.tradeGrade || { grade: 'SKIP', stake: 0, label: 'SKIP — NO EDGE' };
+      const tgClass  = 'grade-' + tg.grade.replace('+','plus');
+      const tgLabel  = tg.grade + ' · ' + tg.label + (tg.stake > 0 ? ' (' + tg.stake + '%)' : '');
       revealBanner = `<div class="signal-reveal ${lockedSig}">
         <div>
           <div class="reveal-lbl">NEXT CANDLE PREDICTION</div>
           <div class="reveal-dir ${lockedSig}">
             ${lockedSig==='buy'?'▲ CALL / UP':lockedSig==='sell'?'▼ PUT / DOWN':'⏸ NO SIGNAL'}
           </div>
+          <div class="trade-grade ${tgClass}">${tgLabel}</div>
         </div>
         <div style="margin-left:auto;text-align:right">
           <div class="reveal-conf">${lockedConf}%</div>

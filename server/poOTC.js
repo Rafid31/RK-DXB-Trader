@@ -428,6 +428,10 @@ function getOTCState() {
       // 15-second candle timeframe trend
       trend15s:      sig.trend15s      || 'FLAT',
       trend15sStrength: sig.trend15sStrength || 0,
+      // v5.0 — professional grade signals
+      divergence:  sig.divergence  || 'NONE',
+      climax:      sig.climax      || null,
+      tradeGrade:  sig.tradeGrade  || { grade: 'SKIP', stake: 0, label: 'SKIP — NO EDGE' },
       isOTC:      true,
       isCrypto:   symbol.toLowerCase().includes('btc') || symbol.toLowerCase().includes('eth')
     };
