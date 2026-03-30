@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RK DXB — PocketOption Live Feed",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Captures live tick data from Pocket Option and sends to RK DXB Trader for real signal accuracy",
   "permissions": ["storage"],
   "host_permissions": [
@@ -18,15 +18,19 @@
         "https://pocketoption.com/*",
         "https://po.market/*"
       ],
+      "js": ["injected.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://pocketoption.com/*",
+        "https://po.market/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": false
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["injected.js"],
-      "matches": ["https://pocketoption.com/*", "https://po.market/*"]
     }
   ],
   "action": {

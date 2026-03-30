@@ -1,31 +1,22 @@
-// RK DXB — PO Live Feed: Content Script
-// Injects the WebSocket interceptor into the page's MAIN world context
-// (required because extensions run in isolated world by default)
+// RK DXB — PO Live Feed: Content Script (isolated world)
+// injected.js now runs in MAIN world directly via manifest "world":"MAIN"
+// This script handles the bridge: CustomEvent → server fetch + popup update
 
-(function () {
-  // Step 1: inject interceptor into main world
-  const script = document.createElement('script');
-  script.src = chrome.runtime.getURL('injected.js');
-  script.onload = function () { this.remove(); };
-  (document.head || document.documentElement).appendChild(script);
+window.addEventListener('__RK_PO_TICKS__', function (event) {
+  const ticks = event.detail;
+  if (!ticks || !ticks.length) return;
 
-  // Step 2: relay captured ticks to the server
-  window.addEventListener('__RK_PO_TICKS__', function (event) {
-    const ticks = event.detail;
-    if (!ticks || !ticks.length) return;
+  // Send tick batch to RK DXB server
+  fetch('https://rk-dxb-trader.onrender.com/api/po-tick', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ ticks: ticks, source: 'po_ext_v1.1' })
+  }).catch(function () {});
 
-    // Send to RK DXB server
-    fetch('https://rk-dxb-trader.onrender.com/api/po-tick', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ ticks: ticks, source: 'po_ext_v1' })
-    }).catch(function () {});
-
-    // Update popup stats
-    chrome.runtime.sendMessage({
-      type:  'TICK_UPDATE',
-      count: ticks.length,
-      pairs: ticks.map(t => t.sym)
-    }).catch(function () {});
-  });
-})();
+  // Update popup stats
+  chrome.runtime.sendMessage({
+    type:  'TICK_UPDATE',
+    count: ticks.length,
+    pairs: ticks.map(function (t) { return t.sym; })
+  }).catch(function () {});
+});
