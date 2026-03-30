@@ -438,4 +438,93 @@ function getOTCState() {
   });
 }
 
-module.exports = { updateAllOTC, getOTCState, OTC_PAIRS };
+// ================================================================
+// REAL TICK FEED — from Pocket Option Chrome Extension
+// When the extension is running, we get actual price ticks every
+// ~1s from the PO WebSocket, which are FAR more accurate than
+// SVG-derived price positions (0-100 normalised range).
+//
+// Real ticks are used to:
+//   1. Build proper OHLC 1-min candles with real prices
+//   2. Calculate RSI/Stoch/BB on real prices → better signals
+// ================================================================
+
+const poRealTicks   = {};   // sym -> { price, ts }  (latest tick)
+const poRealCandles = {};   // sym -> closed 1m candles with real prices
+const poRealCurrent = {};   // sym -> current forming candle (real prices)
+let   poTickTotal   = 0;    // total ticks received this session
+let   poLastPush    = null; // timestamp of last extension push
+
+OTC_PAIRS.forEach(sym => {
+  poRealTicks[sym]   = null;
+  poRealCandles[sym] = [];
+  poRealCurrent[sym] = null;
+});
+
+function normalizePoSymbol(raw) {
+  if (!raw) return null;
+  let s = String(raw).toLowerCase().trim();
+  if (!s.endsWith('_otc')) s += '_otc';
+  return s;
+}
+
+// Build real-price OHLC candle from incoming tick
+function buildRealCandle(sym, price, ts) {
+  const minute = Math.floor(ts / 60000) * 60000;
+  const cur    = poRealCurrent[sym];
+
+  if (!cur || cur.minute !== minute) {
+    // Close previous candle
+    if (cur && cur.tickCount > 0) {
+      const closed = {
+        time:   new Date(cur.minute).toISOString(),
+        open:   cur.open, high: cur.high,
+        low:    cur.low,  close: cur.close,
+        volume: cur.tickCount, minute: cur.minute
+      };
+      poRealCandles[sym].push(closed);
+      if (poRealCandles[sym].length > 120) poRealCandles[sym].shift();
+    }
+    // Open new candle
+    poRealCurrent[sym] = {
+      minute, open: price, high: price, low: price,
+      close: price, tickCount: 1
+    };
+  } else {
+    if (price > cur.high) cur.high = price;
+    if (price < cur.low)  cur.low  = price;
+    cur.close    = price;
+    cur.tickCount++;
+  }
+}
+
+// Called by server.js when extension sends tick batch
+function processPOTicks(ticks) {
+  if (!Array.isArray(ticks) || !ticks.length) return;
+  poLastPush = Date.now();
+
+  ticks.forEach(t => {
+    if (!t || !t.sym || t.price === undefined) return;
+    const sym   = normalizePoSymbol(t.sym);
+    const price = parseFloat(t.price);
+    const ts    = t.ts || Date.now();
+    if (!sym || isNaN(price) || price <= 0) return;
+    poRealTicks[sym] = { price, ts };
+    poTickTotal++;
+    buildRealCandle(sym, price, ts);
+  });
+}
+
+// Status endpoint data
+function getPOFeedStatus() {
+  const activePairs = OTC_PAIRS.filter(s => poRealTicks[s] && (Date.now() - poRealTicks[s].ts) < 10000);
+  return {
+    live:       activePairs.length > 0,
+    totalTicks: poTickTotal,
+    pairs:      activePairs.map(s => s.replace('_otc','').toUpperCase()),
+    lastPush:   poLastPush,
+    secsSince:  poLastPush ? Math.round((Date.now() - poLastPush) / 1000) : null
+  };
+}
+
+module.exports = { updateAllOTC, getOTCState, OTC_PAIRS, processPOTicks, getPOFeedStatus };

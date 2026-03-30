@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width:220px; background:#0f172a; color:#e2e8f0; font-family:monospace; padding:12px; margin:0 }
+    h2 { color:#00e676; font-size:13px; margin:0 0 10px }
+    .row { display:flex; justify-content:space-between; margin:4px 0; font-size:11px }
+    .label { color:#94a3b8 }
+    .val { color:#fff; font-weight:bold }
+    .green { color:#00e676 }
+    .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px }
+    .dot.on { background:#00e676 }
+    .dot.off { background:#ef4444 }
+    #pairs { font-size:9px; color:#64748b; margin-top:8px; word-break:break-all }
+    .link { color:#38bdf8; font-size:10px; cursor:pointer; text-decoration:underline; margin-top:8px; display:block }
+  </style>
+</head>
+<body>
+  <h2>🟢 RK DXB · PO Live Feed</h2>
+  <div class="row">
+    <span class="label">Status</span>
+    <span class="val"><span class="dot" id="dot"></span><span id="status">Checking…</span></span>
+  </div>
+  <div class="row">
+    <span class="label">Ticks received</span>
+    <span class="val green" id="count">0</span>
+  </div>
+  <div class="row">
+    <span class="label">Active pairs</span>
+    <span class="val" id="pairCount">0</span>
+  </div>
+  <div id="pairs"></div>
+  <a class="link" id="openSite" href="#">Open RK DXB Trader →</a>
+  <script src="popup.js"></script>
+</body>
+</html>

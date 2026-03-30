@@ -11,7 +11,7 @@ const cron = require('node-cron');
 
 const { getKey } = require('./apiKeys');
 const { fetchCryptoCandles } = require('./binance');
-const { updateAllOTC, getOTCState } = require('./poOTC');
+const { updateAllOTC, getOTCState, processPOTicks, getPOFeedStatus } = require('./poOTC');
 const { processTicks: qxProcessTicks, getQXState } = require('./qxEngine');
 const { calculateSignal } = require('./signalEngine');
 const { getCurrentSessions, isMarketOpen, isForexOpen, isForexWeekend, isHighVolatilitySession, getNextSessionEvent, getSessionAlerts } = require('./sessions');
@@ -166,6 +166,20 @@ app.get('/', (req, res) => res.json({
 
 app.get('/api/signals', (req, res) => res.json(buildState()));
 app.get('/api/otc', (req, res) => res.json({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() }));
+
+// PO: Receive real ticks from Pocket Option Chrome Extension (POST)
+app.post('/api/po-tick', (req, res) => {
+  try {
+    const { ticks } = req.body || {};
+    if (ticks && ticks.length) processPOTicks(ticks);
+    res.json({ ok: true, received: ticks?.length || 0 });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// PO: Feed status (used by extension popup)
+app.get('/api/po-status', (req, res) => res.json(getPOFeedStatus()));
 
 // QX: Receive ticks from Chrome extension (POST)
 app.post('/api/qx-push', (req, res) => {

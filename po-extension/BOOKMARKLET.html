@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>RK DXB — PO Bookmarklet</title>
+  <style>
+    body { font-family: monospace; background: #0f172a; color: #e2e8f0; padding: 30px; max-width: 700px; }
+    h1 { color: #00e676; }
+    .box { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    .bm-link { display: inline-block; background: #00e676; color: #000; font-weight: bold;
+               padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; margin: 10px 0; }
+    code { background: #0f172a; color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    ol li { margin: 8px 0; color: #94a3b8; }
+    .note { color: #f59e0b; font-size: 12px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<h1>🟢 RK DXB — Pocket Option Live Feed</h1>
+
+<div class="box">
+  <h3 style="color:#38bdf8; margin-top:0">Option A: Chrome Extension (BEST — works automatically)</h3>
+  <ol>
+    <li>In Chrome, go to <code>chrome://extensions</code></li>
+    <li>Enable <strong>Developer mode</strong> (top right toggle)</li>
+    <li>Click <strong>Load unpacked</strong></li>
+    <li>Select the <code>po-extension</code> folder</li>
+    <li>Open <a href="https://pocketoption.com" style="color:#00e676">Pocket Option</a> — data captures automatically</li>
+  </ol>
+  <p style="color:#00e676; font-size:12px">✅ Best option — runs every time you open PO, no clicks needed</p>
+</div>
+
+<div class="box">
+  <h3 style="color:#38bdf8; margin-top:0">Option B: Bookmarklet (click once per session)</h3>
+  <ol>
+    <li>Drag the button below to your browser bookmarks bar</li>
+    <li>Open <a href="https://pocketoption.com" style="color:#00e676">Pocket Option</a> in your browser</li>
+    <li>Click the bookmark — a green badge will appear on PO</li>
+    <li>Navigate to any OTC pair chart — ticks start flowing</li>
+  </ol>
+
+  <a class="bm-link" href="javascript:(function(){if(window.__rkPOActive){alert('RK DXB feed already running! '+window.__rkPOTicks+' ticks captured.');return;}window.__rkPOActive=true;window.__rkPOTicks=0;var SERVER='https://rk-dxb-trader.onrender.com';var pending={};var timer=null;function flush(){timer=null;var batch=Object.values(pending);pending={};if(!batch.length)return;fetch(SERVER+'/api/po-tick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticks:batch,source:'bookmarklet'})}).catch(function(){});}function tick(asset,price,ts){if(!asset||price===undefined)return;var sym=String(asset).toLowerCase();if(!sym.endsWith('_otc'))sym+='_otc';var p=parseFloat(price);if(isNaN(p)||p<=0)return;pending[sym]={sym:sym,price:p,ts:ts||Date.now()};window.__rkPOTicks++;if(!timer)timer=setTimeout(flush,900);}function parse(raw){if(typeof raw!=='string')return;var json=null;if(raw.indexOf('42[')===0)json=raw.slice(2);else if(raw.indexOf('451-[')===0)json=raw.slice(4);else if(raw[0]==='['||raw[0]==='{')json=raw;else return;var p;try{p=JSON.parse(json);}catch(e){return;}if(Array.isArray(p)&&p.length>=2){var ev=p[0],pl=p[1];if(['tick','quote','price','stream'].indexOf(ev)>=0&&pl&&pl.asset){tick(pl.asset,pl.price||pl.value||pl.close,pl.time);}else if(['candles','history','asset/generate'].indexOf(ev)>=0&&pl&&pl.asset&&Array.isArray(pl.candles)&&pl.candles.length){var last=pl.candles[pl.candles.length-1];if(last)tick(pl.asset,last.close||last.c,pl.time);}else if(pl&&typeof pl==='object'&&pl.asset){tick(pl.asset,pl.price||pl.close,pl.time);}}else if(!Array.isArray(p)&&p&&p.asset){tick(p.asset,p.price||p.close,p.time);}}var _WS=window.WebSocket;function RKWebSocket(url,proto){var ws=proto?new _WS(url,proto):new _WS(url);ws.addEventListener('message',function(e){try{parse(e.data);}catch(_){}});return ws;}RKWebSocket.prototype=_WS.prototype;Object.setPrototypeOf(RKWebSocket,_WS);window.WebSocket=RKWebSocket;var badge=document.createElement('div');badge.style.cssText='position:fixed;top:60px;right:10px;z-index:2147483647;background:#0f172a;color:#00e676;border:1px solid #00e676;border-radius:8px;padding:5px 10px;font:bold 11px monospace;pointer-events:none';badge.textContent='🟢 RK LIVE FEED';document.body.appendChild(badge);setInterval(function(){badge.textContent='🟢 RK FEED · '+window.__rkPOTicks+' ticks';},2000);alert('✅ RK DXB Live Feed activated!\n\nNow navigate to any OTC chart on Pocket Option.\nA green badge will show tick count.\n\nSignals at: rk-dxb-trader.pages.dev/otc');})();">
+    🟢 Drag me to bookmarks bar
+  </a>
+
+  <p class="note">⚠️ Bookmarklet only captures NEW WebSocket connections. After clicking, navigate to a chart pair for it to take effect.</p>
+</div>
+
+<div class="box" style="border-color:#00e676">
+  <h3 style="color:#00e676; margin-top:0">How it works</h3>
+  <p style="color:#94a3b8; font-size:13px">
+    Pocket Option sends live price ticks through a WebSocket connection.
+    This tool intercepts those ticks at the source — the same data that draws the candlestick chart —
+    and forwards them to the RK DXB Trader server. The signal engine then uses real prices
+    (instead of SVG-approximated values) to build better candles and calculate more accurate signals.
+  </p>
+  <p style="color:#00e676; font-size:12px">
+    Live feed → <strong>rk-dxb-trader.onrender.com/api/po-status</strong> (check if connected)
+  </p>
+</div>
+
+</body>
+</html>
