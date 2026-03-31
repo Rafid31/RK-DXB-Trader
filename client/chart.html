@@ -210,6 +210,8 @@ let activeSym  = 'EUR/USD';
 let chart      = null;
 let series     = null;
 let lastRawCandles = [];  // keep full candle array for live tick updates
+let synthOpen  = null;    // open price of the current synthetic (forming) candle
+let synthTime  = 0;       // unix seconds of the current synthetic candle minute
 let cdV        = 60;
 let cdTimer    = null;
 let flashTimer = null;
@@ -344,6 +346,9 @@ function loadPair(sym, skipScroll) {
   /* Build + set candle data */
   const raw = pair.candles || [];
   lastRawCandles = raw;
+  // Reset synth state — server data takes precedence
+  synthTime = 0;
+  synthOpen = null;
 
   const cData = raw.map(c => ({
     time:  toUnix(c.time),
@@ -512,8 +517,54 @@ async function fetchCandles() {
 }
 
 /* ═══════════════════════════════════════
+   CANDLE SYNTHESIS ENGINE
+   Called every 5s with the live price.
+   Draws the current forming candle even
+   when Twelve Data hasn't returned it yet.
+═══════════════════════════════════════ */
+function updateLiveCandle(price) {
+  if (!series || !price || lastRawCandles.length === 0) return;
+
+  const lastRaw      = lastRawCandles[lastRawCandles.length - 1];
+  const lastServerT  = toUnix(lastRaw.time);           // e.g. unix for 23:06:00
+  const lastClose    = parseFloat(lastRaw.close);
+
+  // Current UTC minute boundary (floor current time to the minute)
+  const nowUnix      = Math.floor(Date.now() / 1000);
+  const currentMinT  = nowUnix - (nowUnix % 60);       // e.g. unix for 23:10:00
+
+  if (currentMinT <= lastServerT) {
+    // We are still inside the last server candle — just extend it with live price
+    series.update({
+      time:  lastServerT,
+      open:  parseFloat(lastRaw.open),
+      high:  Math.max(parseFloat(lastRaw.high), price),
+      low:   Math.min(parseFloat(lastRaw.low),  price),
+      close: price,
+    });
+    // Reset synth state since server has caught up
+    synthTime = 0;
+    synthOpen = null;
+
+  } else {
+    // Current minute is AHEAD of server data — synthesise the forming candle
+    if (synthTime !== currentMinT) {
+      // New minute started: open at the last known close (server or previous synth)
+      synthOpen = synthTime === 0 ? lastClose : price;
+      synthTime = currentMinT;
+    }
+    series.update({
+      time:  currentMinT,
+      open:  synthOpen,
+      high:  Math.max(synthOpen, price),
+      low:   Math.min(synthOpen, price),
+      close: price,
+    });
+  }
+}
+
+/* ═══════════════════════════════════════
    LIVE PRICE TICK — every 5 seconds
-   Updates CURRENT CANDLE close/high/low
 ═══════════════════════════════════════ */
 async function liveTick() {
   try {
@@ -523,45 +574,30 @@ async function liveTick() {
 
     flash();
 
-    /* Sync countdown every tick if we have secsToNextCandle */
-    if (data.secsToNextCandle != null) {
-      // Only re-sync if we've drifted by more than 3s
-      if (Math.abs(cdV - data.secsToNextCandle) > 3) {
-        cdV = data.secsToNextCandle;
-      }
+    // Sync countdown to real candle boundary
+    if (data.secsToNextCandle != null && Math.abs(cdV - data.secsToNextCandle) > 3) {
+      cdV = data.secsToNextCandle;
     }
 
-    /* Update ALL pairs' prices in allData */
     const prices = data.prices;
+
+    // Update allData prices
     allData = allData.map(p => {
       const rec = prices[p.symbol];
       if (!rec || !rec.price) return p;
       return { ...p, price: rec.price };
     });
 
-    /* Update price display and current candle for active pair */
-    const rec = prices[activeSym];
+    // Update price header for active pair
+    const rec  = prices[activeSym];
     if (!rec || !rec.price) return;
-
     const pair = allData.find(p => p.symbol === activeSym);
     setPrice(rec.price, pair ? pair.prevPrice : null);
 
-    /* Update the last bar on the chart with live price */
-    if (series && lastRawCandles.length > 0) {
-      const lastRaw = lastRawCandles[lastRawCandles.length - 1];
-      const t = toUnix(lastRaw.time);
-      if (t > 0 && rec.price) {
-        series.update({
-          time:  t,
-          open:  parseFloat(lastRaw.open),
-          high:  Math.max(parseFloat(lastRaw.high),  rec.price),
-          low:   Math.min(parseFloat(lastRaw.low),   rec.price),
-          close: rec.price,
-        });
-      }
-    }
+    // Draw / extend the live candle on the chart
+    updateLiveCandle(rec.price);
 
-    /* Rebuild sidebar with updated prices */
+    // Rebuild sidebar
     buildSidebar(allData);
 
   } catch(e) { /* silent */ }
