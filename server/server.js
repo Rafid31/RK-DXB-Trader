@@ -51,7 +51,7 @@ ALL_PAIRS.forEach(p => {
 // ── Fetcher ──────────────────────────────────────────────────
 async function fetchCandles(symbol, outputsize = 90) {
   const key = getKey();
-  const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1min&outputsize=${outputsize}&apikey=${key}`;
+  const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1min&outputsize=${outputsize}&timezone=UTC&apikey=${key}`;
   try {
     const res = await fetch(url, { timeout: 12000 });
     const data = await res.json();
@@ -189,6 +189,21 @@ app.get('/api/candles', (req, res) => {
     };
   });
   res.json({ pairs, serverTime: new Date().toISOString() });
+});
+
+// Fast prices endpoint — just current price per pair, no candle history (for 5s live tick)
+app.get('/api/prices', (req, res) => {
+  const prices = {};
+  ALL_PAIRS.forEach(p => {
+    const candles = candleStore[p.symbol] || [];
+    const last    = candles[candles.length - 1];
+    prices[p.symbol] = {
+      price:  last ? last.close : null,
+      time:   last ? last.time  : null,
+      signal: (lastSignals[p.symbol] || {}).signal || 'WAIT',
+    };
+  });
+  res.json({ prices, serverTime: new Date().toISOString() });
 });
 
 // PO: Receive real ticks from Pocket Option Chrome Extension (POST)
