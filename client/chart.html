@@ -212,6 +212,7 @@ let series     = null;
 let lastRawCandles = [];  // keep full candle array for live tick updates
 let synthOpen  = null;    // open price of the current synthetic (forming) candle
 let synthTime  = 0;       // unix seconds of the current synthetic candle minute
+let synthGapsFilled = {}; // tracks which gap-minute candles have been drawn already
 let cdV        = 60;
 let cdTimer    = null;
 let flashTimer = null;
@@ -518,23 +519,22 @@ async function fetchCandles() {
 
 /* ═══════════════════════════════════════
    CANDLE SYNTHESIS ENGINE
-   Called every 5s with the live price.
-   Draws the current forming candle even
-   when Twelve Data hasn't returned it yet.
+   Fills ALL gap candles between last server
+   candle and current minute, then draws the
+   live forming candle — no more blank gaps.
 ═══════════════════════════════════════ */
 function updateLiveCandle(price) {
   if (!series || !price || lastRawCandles.length === 0) return;
 
-  const lastRaw      = lastRawCandles[lastRawCandles.length - 1];
-  const lastServerT  = toUnix(lastRaw.time);           // e.g. unix for 23:06:00
-  const lastClose    = parseFloat(lastRaw.close);
+  const lastRaw     = lastRawCandles[lastRawCandles.length - 1];
+  const lastServerT = toUnix(lastRaw.time);
+  const lastClose   = parseFloat(lastRaw.close);
 
-  // Current UTC minute boundary (floor current time to the minute)
-  const nowUnix      = Math.floor(Date.now() / 1000);
-  const currentMinT  = nowUnix - (nowUnix % 60);       // e.g. unix for 23:10:00
+  const nowUnix     = Math.floor(Date.now() / 1000);
+  const currentMinT = nowUnix - (nowUnix % 60);
 
   if (currentMinT <= lastServerT) {
-    // We are still inside the last server candle — just extend it with live price
+    // Still inside last server candle — extend it live
     series.update({
       time:  lastServerT,
       open:  parseFloat(lastRaw.open),
@@ -542,25 +542,46 @@ function updateLiveCandle(price) {
       low:   Math.min(parseFloat(lastRaw.low),  price),
       close: price,
     });
-    // Reset synth state since server has caught up
     synthTime = 0;
     synthOpen = null;
+    return;
+  }
 
-  } else {
-    // Current minute is AHEAD of server data — synthesise the forming candle
-    if (synthTime !== currentMinT) {
-      // New minute started: open at the last known close (server or previous synth)
-      synthOpen = synthTime === 0 ? lastClose : price;
-      synthTime = currentMinT;
+  // Gap: one or more minutes between server data and now.
+  // Fill each missing completed minute as a flat doji at last close
+  // so the chart has no blank gaps (same as what TradingView shows
+  // between data updates).
+  const gapStart = lastServerT + 60;
+  for (let t = gapStart; t < currentMinT; t += 60) {
+    // Only write each gap bar once (avoid re-writing on every tick)
+    if (!synthGapsFilled[t]) {
+      series.update({
+        time:  t,
+        open:  lastClose,
+        high:  lastClose,
+        low:   lastClose,
+        close: lastClose,
+      });
+      synthGapsFilled[t] = true;
     }
-    series.update({
-      time:  currentMinT,
-      open:  synthOpen,
-      high:  Math.max(synthOpen, price),
-      low:   Math.min(synthOpen, price),
-      close: price,
+  }
+
+  // Current forming candle
+  if (synthTime !== currentMinT) {
+    synthOpen = lastClose;  // open at last known close price
+    synthTime = currentMinT;
+    // Clear old gap records when minute rolls
+    Object.keys(synthGapsFilled).forEach(k => {
+      if (Number(k) < gapStart) delete synthGapsFilled[k];
     });
   }
+  series.update({
+    time:  currentMinT,
+    open:  synthOpen,
+    high:  Math.max(synthOpen, price),
+    low:   Math.min(synthOpen, price),
+    close: price,
+  });
 }
 
 /* ═══════════════════════════════════════
