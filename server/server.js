@@ -167,8 +167,24 @@ app.get('/', (req, res) => res.json({
 app.get('/api/signals', (req, res) => res.json(buildState()));
 app.get('/api/otc', (req, res) => res.json({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() }));
 
+// Track whether a background refresh is in progress
+let _refreshing = false;
+
 // Live Candle Chart endpoint — returns last 80 candles + signal for each pair
 app.get('/api/candles', (req, res) => {
+  const now = new Date();
+
+  // Stale detection — if any forex pair hasn't updated in >5 min, trigger background refresh
+  const sig0 = lastSignals['EUR/USD'];
+  if (sig0 && sig0.updatedAt) {
+    const ageMs = now.getTime() - new Date(sig0.updatedAt).getTime();
+    if (ageMs > 5 * 60 * 1000 && !_refreshing) {
+      _refreshing = true;
+      console.log(`[STALE] Data ${Math.floor(ageMs/60000)}m old — auto-refreshing...`);
+      updateAllPairs().then(() => { _refreshing = false; }).catch(() => { _refreshing = false; });
+    }
+  }
+
   const pairs = ALL_PAIRS.map(p => {
     const candles = (candleStore[p.symbol] || []).slice(-80);
     const sig     = lastSignals[p.symbol] || { signal: 'WAIT', confidence: 0 };
@@ -188,7 +204,15 @@ app.get('/api/candles', (req, res) => {
       updatedAt:  sig.updatedAt || null
     };
   });
-  res.json({ pairs, serverTime: new Date().toISOString() });
+
+  // secsToNextCandle: seconds until the next 1-minute candle closes (syncs chart countdown)
+  const secsToNextCandle = 60 - now.getUTCSeconds();
+  // dataAge: seconds since last update (client shows stale warning if > 180s)
+  const dataAge = sig0 && sig0.updatedAt
+    ? Math.floor((now.getTime() - new Date(sig0.updatedAt).getTime()) / 1000)
+    : null;
+
+  res.json({ pairs, serverTime: now.toISOString(), secsToNextCandle, dataAge });
 });
 
 // Fast prices endpoint — just current price per pair, no candle history (for 5s live tick)
@@ -203,7 +227,8 @@ app.get('/api/prices', (req, res) => {
       signal: (lastSignals[p.symbol] || {}).signal || 'WAIT',
     };
   });
-  res.json({ prices, serverTime: new Date().toISOString() });
+  const now2 = new Date();
+  res.json({ prices, serverTime: now2.toISOString(), secsToNextCandle: 60 - now2.getUTCSeconds() });
 });
 
 // PO: Receive real ticks from Pocket Option Chrome Extension (POST)
@@ -375,7 +400,9 @@ function broadcast() {
 }
 
 // ── Cron ─────────────────────────────────────────────────────
-cron.schedule('*/5 * * * *', async () => { await updateAllPairs(); broadcast(); }); // Every 5min = 96 calls/day per key (within 800 free limit)
+// Update candles every 2 minutes — stays within Twelve Data free limits (6 keys rotating)
+cron.schedule('*/2 * * * *', async () => { await updateAllPairs(); broadcast(); });
+// Broadcast state every second (no new API call — just pushes cached data)
 cron.schedule('* * * * * *', () => { broadcast(); });
 
 // Update OTC every second - po-static.com is live per second
