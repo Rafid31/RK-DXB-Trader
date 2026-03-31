@@ -167,6 +167,30 @@ app.get('/', (req, res) => res.json({
 app.get('/api/signals', (req, res) => res.json(buildState()));
 app.get('/api/otc', (req, res) => res.json({ type: 'otc', pairs: getOTCState(), serverTime: new Date().toISOString() }));
 
+// Live Candle Chart endpoint — returns last 80 candles + signal for each pair
+app.get('/api/candles', (req, res) => {
+  const pairs = ALL_PAIRS.map(p => {
+    const candles = (candleStore[p.symbol] || []).slice(-80);
+    const sig     = lastSignals[p.symbol] || { signal: 'WAIT', confidence: 0 };
+    const last    = candles[candles.length - 1];
+    const prev    = candles[candles.length - 2];
+    return {
+      symbol:     p.symbol,
+      type:       p.type || 'forex',
+      candles,
+      signal:     sig.signal     || 'WAIT',
+      confidence: sig.confidence || 0,
+      reasons:    sig.reasons    || [],
+      rsi:        sig.rsi        || null,
+      emaTrend:   sig.emaTrend   || null,
+      price:      last  ? last.close  : null,
+      prevPrice:  prev  ? prev.close  : null,
+      updatedAt:  sig.updatedAt || null
+    };
+  });
+  res.json({ pairs, serverTime: new Date().toISOString() });
+});
+
 // PO: Receive real ticks from Pocket Option Chrome Extension (POST)
 app.post('/api/po-tick', (req, res) => {
   try {

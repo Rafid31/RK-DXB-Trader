@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RK DXB — Live Charts</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    --bg: #0b0e17;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --muted: #6b7280;
+    --green: #00e676;
+    --red: #f44336;
+    --blue: #3b82f6;
+    --yellow: #fbbf24;
+    --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* ── TOP NAV ── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .logo { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: var(--green); }
+  .logo span { color: var(--text); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a {
+    color: var(--muted); text-decoration: none; padding: 5px 12px;
+    border-radius: 6px; font-size: 12px; font-weight: 500;
+    transition: all .15s;
+  }
+  .nav-links a:hover { color: var(--text); background: var(--border); }
+  .nav-links a.active { color: var(--green); background: rgba(0,230,118,0.1); }
+
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .server-time { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .refresh-btn {
+    background: rgba(0,230,118,0.12); color: var(--green);
+    border: 1px solid rgba(0,230,118,0.3); border-radius: 7px;
+    padding: 5px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
+    transition: all .15s;
+  }
+  .refresh-btn:hover { background: rgba(0,230,118,0.22); }
+  .refresh-btn.loading { opacity: .6; cursor: not-allowed; }
+
+  /* ── COUNTDOWN BAR ── */
+  .countdown-bar {
+    height: 3px; background: var(--border);
+    position: sticky; top: 45px; z-index: 99;
+  }
+  .countdown-fill {
+    height: 100%; background: var(--green);
+    transition: width 1s linear;
+  }
+
+  /* ── STATUS STRIP ── */
+  .status-strip {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 20px; background: rgba(0,0,0,0.3);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); display: inline-block;
+    animation: pulse 2s infinite;
+  }
+  .status-dot.dead { background: var(--muted); animation: none; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: .3; }
+  }
+  .filter-tabs { display: flex; gap: 6px; }
+  .filter-tab {
+    padding: 3px 10px; border-radius: 5px; cursor: pointer;
+    font-size: 11px; font-weight: 600;
+    border: 1px solid var(--border); color: var(--muted);
+    transition: all .15s;
+  }
+  .filter-tab:hover { color: var(--text); border-color: var(--muted); }
+  .filter-tab.active { color: var(--green); border-color: rgba(0,230,118,0.4); background: rgba(0,230,118,0.08); }
+
+  /* ── GRID ── */
+  .grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 14px;
+    padding: 16px 20px;
+  }
+
+  /* ── CHART CARD ── */
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .chart-card:hover { border-color: #374151; }
+  .chart-card.signal-buy  { border-color: rgba(0,230,118,0.4); }
+  .chart-card.signal-sell { border-color: rgba(244,67,54,0.4); }
+
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 6px;
+  }
+  .pair-info { display: flex; align-items: center; gap: 9px; }
+  .pair-symbol {
+    font-size: 14px; font-weight: 800; letter-spacing: .5px;
+  }
+  .pair-type {
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    padding: 2px 6px; border-radius: 4px;
+    color: var(--blue); background: rgba(59,130,246,0.12);
+    border: 1px solid rgba(59,130,246,0.25);
+  }
+  .pair-type.crypto {
+    color: var(--yellow); background: rgba(251,191,36,0.1);
+    border-color: rgba(251,191,36,0.25);
+  }
+
+  .price-block { text-align: right; }
+  .price-value {
+    font-size: 15px; font-weight: 700; font-family: var(--mono);
+  }
+  .price-change {
+    font-size: 10px; font-family: var(--mono); margin-top: 1px;
+  }
+  .price-change.up { color: var(--green); }
+  .price-change.dn { color: var(--red); }
+  .price-change.flat { color: var(--muted); }
+
+  /* chart area */
+  .chart-wrap {
+    height: 180px;
+    position: relative;
+    background: #0d1117;
+  }
+  .chart-inner { width: 100%; height: 100%; }
+  .chart-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* signal footer */
+  .card-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+  }
+  .signal-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 11px; border-radius: 6px;
+    font-size: 11px; font-weight: 800; letter-spacing: .5px;
+    font-family: var(--mono);
+  }
+  .signal-badge.buy  { background: rgba(0,230,118,0.15); color: var(--green); border: 1px solid rgba(0,230,118,0.35); }
+  .signal-badge.sell { background: rgba(244,67,54,0.15); color: var(--red); border: 1px solid rgba(244,67,54,0.35); }
+  .signal-badge.wait { background: rgba(107,114,128,0.1); color: var(--muted); border: 1px solid var(--border); }
+
+  .signal-arrow { font-size: 14px; }
+
+  .confidence-bar {
+    flex: 1; max-width: 80px;
+    height: 4px; background: var(--border); border-radius: 2px;
+    overflow: hidden; margin: 0 10px;
+  }
+  .confidence-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+  .confidence-fill.buy  { background: var(--green); }
+  .confidence-fill.sell { background: var(--red); }
+  .confidence-fill.wait { background: var(--muted); }
+
+  .conf-label { font-size: 10px; font-family: var(--mono); color: var(--muted); min-width: 32px; }
+
+  .reason-text {
+    font-size: 9px; color: var(--muted); margin-top: 1px;
+    max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ── MARKET STATUS BANNER ── */
+  .market-banner {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 7px 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .market-banner.open   { background: rgba(0,230,118,0.07); color: var(--green); }
+  .market-banner.closed { background: rgba(107,114,128,0.07); color: var(--muted); }
+
+  /* ── EMPTY / ERROR ── */
+  .no-data {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+    font-size: 13px;
+  }
+  .no-data h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
+
+  /* ── LOADING SKELETON ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--border) 25%, #252f3f 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+  }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+  /* ── TOOLTIP ── */
+  .signal-tooltip {
+    position: fixed;
+    background: #1a2235; border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+    font-size: 11px; color: var(--text);
+    pointer-events: none; z-index: 999;
+    max-width: 260px; display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .signal-tooltip.visible { display: block; }
+  .tooltip-pair { font-weight: 800; font-size: 13px; margin-bottom: 6px; }
+  .tooltip-reason { color: var(--muted); line-height: 1.6; }
+
+  /* ── RSI pill ── */
+  .rsi-pill {
+    font-size: 9px; font-family: var(--mono); font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    background: rgba(107,114,128,0.12); color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .rsi-pill.ob { background: rgba(244,67,54,0.12); color: var(--red); border-color: rgba(244,67,54,0.3); }
+  .rsi-pill.os { background: rgba(0,230,118,0.12); color: var(--green); border-color: rgba(0,230,118,0.3); }
+
+  @media (max-width: 500px) {
+    .grid-container { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
+    .topbar { padding: 8px 12px; }
+    .nav-links { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">RK <span>DXB</span></div>
+    <nav class="nav-links">
+      <a href="/dashboard.html">Dashboard</a>
+      <a href="/qx.html">QX Signals</a>
+      <a href="/otc.html">OTC</a>
+      <a href="/chart.html" class="active">Live Charts</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <div class="server-time" id="serverTime">—</div>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData()">⟳ Refresh</button>
+  </div>
+</div>
+
+<!-- COUNTDOWN -->
+<div class="countdown-bar"><div class="countdown-fill" id="countdownFill" style="width:100%"></div></div>
+
+<!-- MARKET STATUS -->
+<div class="market-banner" id="marketBanner">
+  <span class="status-dot" id="marketDot"></span>
+  <span id="marketText">Checking market status…</span>
+</div>
+
+<!-- STATUS STRIP -->
+<div class="status-strip">
+  <span><span class="status-dot" id="liveDot"></span> &nbsp;Live 1-Minute Candles</span>
+  <div class="filter-tabs">
+    <div class="filter-tab active" data-filter="all" onclick="setFilter('all')">All</div>
+    <div class="filter-tab" data-filter="forex" onclick="setFilter('forex')">Forex</div>
+    <div class="filter-tab" data-filter="crypto" onclick="setFilter('crypto')">Crypto</div>
+    <div class="filter-tab" data-filter="buy" onclick="setFilter('buy')">🟢 BUY</div>
+    <div class="filter-tab" data-filter="sell" onclick="setFilter('sell')">🔴 SELL</div>
+  </div>
+  <span id="pairCount" style="margin-left:auto;">Loading…</span>
+</div>
+
+<!-- GRID -->
+<div class="grid-container" id="grid">
+  <!-- cards injected by JS -->
+</div>
+
+<!-- TOOLTIP -->
+<div class="signal-tooltip" id="tooltip">
+  <div class="tooltip-pair" id="tooltipPair"></div>
+  <div class="tooltip-reason" id="tooltipReason"></div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────
+   CONFIG
+───────────────────────────────────────── */
+const API_BASE  = 'https://rk-dxb-trader.onrender.com';
+const REFRESH_S = 60;   // seconds between auto-refresh
+
+/* chart instances: symbol → { chart, series } */
+const chartInstances = {};
+
+let allPairs   = [];
+let activeFilter = 'all';
+let countdownV   = REFRESH_S;
+let countdownT   = null;
+let autoRefreshT = null;
+
+/* ─────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────── */
+function isForexOpen() {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  const hr  = now.getUTCHours();
+  // Forex: Mon 00:00 – Fri 21:00 UTC (rough)
+  if (day === 0) return false;
+  if (day === 6) return false;
+  if (day === 5 && hr >= 21) return false;
+  return true;
+}
+
+function formatPrice(v, sym) {
+  if (!v) return '—';
+  if (sym && (sym.includes('JPY'))) return Number(v).toFixed(3);
+  if (sym && (sym.includes('BTC') || sym.includes('ETH'))) return Number(v).toFixed(2);
+  return Number(v).toFixed(5);
+}
+
+function priceChange(current, prev, sym) {
+  if (!current || !prev) return { label: '—', cls: 'flat' };
+  const diff  = current - prev;
+  const pct   = (diff / prev) * 100;
+  const sign  = diff >= 0 ? '+' : '';
+  const cls   = diff > 0 ? 'up' : diff < 0 ? 'dn' : 'flat';
+  let label;
+  if (sym && (sym.includes('BTC') || sym.includes('ETH'))) {
+    label = sign + diff.toFixed(2) + ' (' + sign + pct.toFixed(2) + '%)';
+  } else {
+    label = sign + diff.toFixed(5) + ' (' + sign + pct.toFixed(3) + '%)';
+  }
+  return { label, cls };
+}
+
+function rsiClass(rsi) {
+  if (!rsi) return '';
+  if (rsi >= 70) return 'ob';
+  if (rsi <= 30) return 'os';
+  return '';
+}
+
+/* ─────────────────────────────────────────
+   COUNTDOWN
+───────────────────────────────────────── */
+function startCountdown() {
+  if (countdownT) clearInterval(countdownT);
+  countdownV = REFRESH_S;
+  const fill = document.getElementById('countdownFill');
+  countdownT = setInterval(() => {
+    countdownV = Math.max(0, countdownV - 1);
+    fill.style.width = ((countdownV / REFRESH_S) * 100) + '%';
+    if (countdownV === 0) {
+      clearInterval(countdownT);
+      loadData();
+    }
+  }, 1000);
+}
+
+/* ─────────────────────────────────────────
+   FILTER
+───────────────────────────────────────── */
+function setFilter(f) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.filter === f);
+  });
+  renderGrid(allPairs);
+}
+
+/* ─────────────────────────────────────────
+   LOAD DATA
+───────────────────────────────────────── */
+async function loadData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('loading');
+  btn.textContent = '⟳ Loading…';
+
+  try {
+    const res  = await fetch(API_BASE + '/api/candles?ts=' + Date.now());
+    const data = await res.json();
+
+    allPairs = data.pairs || [];
+
+    // server time
+    const st = data.serverTime ? new Date(data.serverTime) : new Date();
+    document.getElementById('serverTime').textContent =
+      st.toLocaleTimeString('en-GB', { hour12: false }) + ' UTC';
+
+    // market banner
+    const open = isForexOpen();
+    const banner = document.getElementById('marketBanner');
+    const mDot   = document.getElementById('marketDot');
+    const mText  = document.getElementById('marketText');
+    if (open) {
+      banner.className = 'market-banner open';
+      mDot.className = 'status-dot';
+      mText.textContent = 'Forex market is OPEN — Live data updating every 60s';
+    } else {
+      banner.className = 'market-banner closed';
+      mDot.className = 'status-dot dead';
+      mText.textContent = 'Forex market is CLOSED — Crypto (BTC/ETH) still live 24/7';
+    }
+
+    renderGrid(allPairs);
+    startCountdown();
+  } catch (e) {
+    console.error(e);
+    document.getElementById('grid').innerHTML =
+      '<div class="no-data" style="grid-column:1/-1"><h3>⚠ Connection Error</h3>' +
+      '<p>Could not reach server. Check your connection.</p></div>';
+  }
+
+  btn.classList.remove('loading');
+  btn.textContent = '⟳ Refresh';
+}
+
+/* ─────────────────────────────────────────
+   RENDER GRID
+───────────────────────────────────────── */
+function renderGrid(pairs) {
+  let filtered = pairs;
+  if (activeFilter === 'forex')  filtered = pairs.filter(p => p.type === 'forex');
+  if (activeFilter === 'crypto') filtered = pairs.filter(p => p.type === 'crypto');
+  if (activeFilter === 'buy')    filtered = pairs.filter(p => p.signal === 'BUY');
+  if (activeFilter === 'sell')   filtered = pairs.filter(p => p.signal === 'SELL');
+
+  const buyCount  = pairs.filter(p => p.signal === 'BUY').length;
+  const sellCount = pairs.filter(p => p.signal === 'SELL').length;
+  document.getElementById('pairCount').textContent =
+    filtered.length + ' pair' + (filtered.length !== 1 ? 's' : '') +
+    '  ·  🟢 ' + buyCount + ' BUY  🔴 ' + sellCount + ' SELL';
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  if (filtered.length === 0) {
+    grid.innerHTML =
+      '<div class="no-data" style="grid-column:1/-1"><h3>No pairs match</h3>' +
+      '<p>Try a different filter.</p></div>';
+    return;
+  }
+
+  // Sort: BUY/SELL first, then WAIT; within each group sort by confidence desc
+  filtered.sort((a, b) => {
+    const rank = s => s === 'BUY' ? 0 : s === 'SELL' ? 1 : 2;
+    if (rank(a.signal) !== rank(b.signal)) return rank(a.signal) - rank(b.signal);
+    return (b.confidence || 0) - (a.confidence || 0);
+  });
+
+  filtered.forEach(pair => {
+    const card = buildCard(pair);
+    grid.appendChild(card);
+  });
+
+  // Build charts after DOM inserted (next tick)
+  requestAnimationFrame(() => {
+    filtered.forEach(pair => {
+      buildChart(pair);
+    });
+  });
+}
+
+/* ─────────────────────────────────────────
+   BUILD CARD HTML
+───────────────────────────────────────── */
+function buildCard(pair) {
+  const div = document.createElement('div');
+  const sig = (pair.signal || 'WAIT').toLowerCase();
+  div.className = 'chart-card' + (sig !== 'wait' ? ' signal-' + sig : '');
+  div.id = 'card-' + pair.symbol.replace('/', '-');
+
+  const chg   = priceChange(pair.price, pair.prevPrice, pair.symbol);
+  const price = formatPrice(pair.price, pair.symbol);
+  const rsiV  = pair.rsi ? Math.round(pair.rsi) : null;
+  const rsiCl = rsiClass(pair.rsi);
+  const conf  = Math.min(pair.confidence || 0, 100);
+
+  const sigArrow = sig === 'buy' ? '▲' : sig === 'sell' ? '▼' : '—';
+  const sigLabel = sig === 'buy' ? 'BUY' : sig === 'sell' ? 'SELL' : 'WAIT';
+
+  const topReasons = (pair.reasons || []).slice(0, 2).join(' · ');
+
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="pair-info">
+        <span class="pair-symbol">${pair.symbol}</span>
+        <span class="pair-type ${pair.type || ''}">${(pair.type || 'forex').toUpperCase()}</span>
+        ${rsiV ? `<span class="rsi-pill ${rsiCl}">RSI ${rsiV}</span>` : ''}
+      </div>
+      <div class="price-block">
+        <div class="price-value">${price}</div>
+        <div class="price-change ${chg.cls}">${chg.label}</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-inner" id="chart-${pair.symbol.replace('/', '-')}"></div>
+      ${(pair.candles || []).length < 5
+        ? '<div class="chart-overlay">⏳ Waiting for candle data…</div>'
+        : ''}
+    </div>
+
+    <div class="card-footer">
+      <div>
+        <span class="signal-badge ${sig}"
+              onmouseenter="showTooltip(event,'${pair.symbol}')"
+              onmouseleave="hideTooltip()">
+          <span class="signal-arrow">${sigArrow}</span>
+          ${sigLabel}
+        </span>
+        ${topReasons ? `<div class="reason-text">${topReasons}</div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="confidence-bar">
+          <div class="confidence-fill ${sig}" style="width:${conf}%"></div>
+        </div>
+        <span class="conf-label">${conf}%</span>
+      </div>
+    </div>
+  `;
+
+  return div;
+}
+
+/* ─────────────────────────────────────────
+   BUILD CANDLESTICK CHART
+───────────────────────────────────────── */
+function buildChart(pair) {
+  const key = pair.symbol.replace('/', '-');
+  const el  = document.getElementById('chart-' + key);
+  if (!el) return;
+
+  // destroy old instance if re-rendering
+  if (chartInstances[key]) {
+    try { chartInstances[key].chart.remove(); } catch(e) {}
+    delete chartInstances[key];
+  }
+
+  const candles = pair.candles || [];
+  if (candles.length < 2) return;
+
+  // Create lightweight chart
+  const chart = LightweightCharts.createChart(el, {
+    width:  el.clientWidth  || 400,
+    height: el.clientHeight || 180,
+    layout: {
+      background: { type: 'solid', color: '#0d1117' },
+      textColor:  '#6b7280',
+    },
+    grid: {
+      vertLines: { color: '#1a2235' },
+      horzLines: { color: '#1a2235' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#374151', width: 1, style: 3 },
+      horzLine: { color: '#374151', width: 1, style: 3 },
+    },
+    rightPriceScale: {
+      borderColor: '#1f2937',
+      textColor: '#6b7280',
+      scaleMargins: { top: 0.1, bottom: 0.15 },
+    },
+    timeScale: {
+      borderColor: '#1f2937',
+      timeVisible: true,
+      secondsVisible: false,
+      fixLeftEdge: false,
+      fixRightEdge: true,
+    },
+    handleScroll: false,
+    handleScale:  false,
+  });
+
+  const series = chart.addCandlestickSeries({
+    upColor:          '#00e676',
+    downColor:        '#f44336',
+    borderUpColor:    '#00e676',
+    borderDownColor:  '#f44336',
+    wickUpColor:      '#00e676',
+    wickDownColor:    '#f44336',
+  });
+
+  // Convert candle data
+  const cData = candles
+    .map(c => {
+      // time can be "2024-01-15 15:30:00" or unix timestamp
+      let t;
+      if (typeof c.time === 'number') {
+        t = c.time;
+      } else {
+        // "2024-01-15 15:30:00" → unix seconds UTC
+        t = Math.floor(new Date(c.time.replace(' ', 'T') + 'Z').getTime() / 1000);
+      }
+      return {
+        time:  t,
+        open:  parseFloat(c.open),
+        high:  parseFloat(c.high),
+        low:   parseFloat(c.low),
+        close: parseFloat(c.close),
+      };
+    })
+    .filter(c => !isNaN(c.open) && c.time > 0)
+    .sort((a, b) => a.time - b.time);
+
+  // Remove duplicate timestamps
+  const seen = new Set();
+  const unique = cData.filter(c => {
+    if (seen.has(c.time)) return false;
+    seen.add(c.time); return true;
+  });
+
+  if (unique.length < 2) return;
+  series.setData(unique);
+
+  // Signal marker on latest bar
+  const sig = pair.signal || 'WAIT';
+  if (sig === 'BUY' || sig === 'SELL') {
+    const lastBar = unique[unique.length - 1];
+    const marker  = {
+      time:     lastBar.time,
+      position: sig === 'BUY' ? 'belowBar' : 'aboveBar',
+      color:    sig === 'BUY' ? '#00e676' : '#f44336',
+      shape:    sig === 'BUY' ? 'arrowUp' : 'arrowDown',
+      text:     sig,
+      size:     1.5,
+    };
+    series.setMarkers([marker]);
+  }
+
+  // Fit to show last 30 candles
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, unique.length - 32), to: unique.length });
+
+  chartInstances[key] = { chart, series };
+
+  // Resize observer
+  const ro = new ResizeObserver(() => {
+    if (el && el.clientWidth) {
+      chart.applyOptions({ width: el.clientWidth });
+    }
+  });
+  ro.observe(el);
+}
+
+/* ─────────────────────────────────────────
+   TOOLTIP
+───────────────────────────────────────── */
+function showTooltip(e, sym) {
+  const pair = allPairs.find(p => p.symbol === sym);
+  if (!pair) return;
+
+  const tt    = document.getElementById('tooltip');
+  const tPair = document.getElementById('tooltipPair');
+  const tReason = document.getElementById('tooltipReason');
+
+  const sig = pair.signal || 'WAIT';
+  const col = sig === 'BUY' ? '#00e676' : sig === 'SELL' ? '#f44336' : '#6b7280';
+
+  tPair.innerHTML = `<span style="color:${col}">${sym} — ${sig}</span>`;
+
+  const lines = (pair.reasons || []).map(r => '• ' + r).join('<br>');
+  tReason.innerHTML = lines || '<span style="color:#6b7280">No reasons</span>';
+
+  tt.style.left = (e.clientX + 12) + 'px';
+  tt.style.top  = (e.clientY + 12) + 'px';
+  tt.classList.add('visible');
+}
+function hideTooltip() {
+  document.getElementById('tooltip').classList.remove('visible');
+}
+
+/* ─────────────────────────────────────────
+   INIT
+───────────────────────────────────────── */
+loadData();
+</script>
+</body>
+</html>
